@@ -5,8 +5,25 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
 local lp = Players.LocalPlayer
 local pg = lp:WaitForChild("PlayerGui")
+
+-- ---------- config ----------
+local CONFIG_PATH = "VBLConfig.json"
+local config = {}
+pcall(function()
+	if isfile and isfile(CONFIG_PATH) then
+		local data = readfile(CONFIG_PATH)
+		if type(data) == "string" and data ~= "" then
+			config = HttpService:JSONDecode(data)
+		end
+	end
+end)
+local function saveConfig()
+	if type(config) ~= "table" then config = {} end
+	pcall(writefile, CONFIG_PATH, HttpService:JSONEncode(config))
+end
 
 local cards = {}
 local cardIndex = 0
@@ -145,6 +162,37 @@ titleFix.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 titleFix.BorderSizePixel = 0
 titleFix.Parent = title
 
+local minBtn = Instance.new("TextButton")
+minBtn.Size = UDim2.new(0, 24, 0, 22)
+minBtn.Position = UDim2.new(1, -28, 0, 4)
+minBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+minBtn.BorderSizePixel = 0
+minBtn.Text = "-"
+minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+minBtn.Font = Enum.Font.GothamBold
+minBtn.TextSize = 14
+minBtn.AutoButtonColor = false
+minBtn.Parent = title
+
+local mCorner = Instance.new("UICorner")
+mCorner.CornerRadius = UDim.new(0, 6)
+mCorner.Parent = minBtn
+
+local minimized = false
+local fullFrameSize = frame.Size
+local function setMinimized(min)
+	minimized = min
+	frame.Size = min and UDim2.new(frame.Size.X.Scale, frame.Size.X.Offset, 0, 30) or fullFrameSize
+	for _, child in ipairs(frame:GetChildren()) do
+		if child ~= title then
+			child.Visible = not min
+		end
+	end
+end
+minBtn.MouseButton1Click:Connect(function()
+	setMinimized(not minimized)
+end)
+
 local status = Instance.new("TextLabel")
 status.Size = UDim2.new(1, -16, 0, 16)
 status.Position = UDim2.new(0, 8, 0, 36)
@@ -233,6 +281,8 @@ applyBtn.MouseButton1Click:Connect(function()
 			selectedId = c.id
 			status.Text = "Card -> " .. c.name
 			log("APPLY: " .. c.name .. " (" .. c.id .. ")")
+			config.PlayerCardSpoofer = { selected = c.id }
+			saveConfig()
 			return
 		end
 	end
@@ -289,4 +339,15 @@ if n == 0 then
 else
 	status.Text = "Cards: " .. n .. " | press < > to browse"
 	nameBox.Text = cards[1].id
+end
+local saved = config.PlayerCardSpoofer and config.PlayerCardSpoofer.selected
+if saved and type(saved) == "string" then
+	for _, c in ipairs(cards) do
+		if c.id == saved then
+			selectedId = saved
+			nameBox.Text = saved
+			status.Text = "Restored saved card -> " .. c.name
+			break
+		end
+	end
 end

@@ -6,8 +6,25 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CollectionService = game:GetService("CollectionService")
 local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
 local lp = Players.LocalPlayer
 local pg = lp:WaitForChild("PlayerGui")
+
+-- ---------- config ----------
+local CONFIG_PATH = "VBLConfig.json"
+local config = {}
+pcall(function()
+	if isfile and isfile(CONFIG_PATH) then
+		local data = readfile(CONFIG_PATH)
+		if type(data) == "string" and data ~= "" then
+			config = HttpService:JSONDecode(data)
+		end
+	end
+end)
+local function saveConfig()
+	if type(config) ~= "table" then config = {} end
+	pcall(writefile, CONFIG_PATH, HttpService:JSONEncode(config))
+end
 
 local ASSETS = ReplicatedStorage:FindFirstChild("Assets")
 local BALL_FOLDER = ASSETS and ASSETS:FindFirstChild("Ball")
@@ -57,6 +74,37 @@ titleFix.Position = UDim2.new(0, 0, 1, -12)
 titleFix.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 titleFix.BorderSizePixel = 0
 titleFix.Parent = title
+
+local minBtn = Instance.new("TextButton")
+minBtn.Size = UDim2.new(0, 24, 0, 22)
+minBtn.Position = UDim2.new(1, -28, 0, 4)
+minBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+minBtn.BorderSizePixel = 0
+minBtn.Text = "-"
+minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+minBtn.Font = Enum.Font.GothamBold
+minBtn.TextSize = 14
+minBtn.AutoButtonColor = false
+minBtn.Parent = title
+
+local mCorner = Instance.new("UICorner")
+mCorner.CornerRadius = UDim.new(0, 6)
+mCorner.Parent = minBtn
+
+local minimized = false
+local fullFrameSize = frame.Size
+local function setMinimized(min)
+	minimized = min
+	frame.Size = min and UDim2.new(frame.Size.X.Scale, frame.Size.X.Offset, 0, 30) or fullFrameSize
+	for _, child in ipairs(frame:GetChildren()) do
+		if child ~= title then
+			child.Visible = not min
+		end
+	end
+end
+minBtn.MouseButton1Click:Connect(function()
+	setMinimized(not minimized)
+end)
 
 local status = Instance.new("TextLabel")
 status.Size = UDim2.new(1, -16, 0, 16)
@@ -301,6 +349,8 @@ end)
 applyBtn.MouseButton1Click:Connect(function()
 	updateStatus()
 	sweep()
+	config.BallSkinChanger = { selected = nameBox.Text }
+	saveConfig()
 end)
 
 resetBtn.MouseButton1Click:Connect(function()
@@ -353,3 +403,14 @@ end)
 
 loadSkins()
 updateStatus()
+local saved = config.BallSkinChanger and config.BallSkinChanger.selected
+if saved and type(saved) == "string" then
+	for _, name in ipairs(skins) do
+		if name == saved then
+			nameBox.Text = saved
+			updateStatus()
+			sweep()
+			break
+		end
+	end
+end

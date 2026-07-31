@@ -27,3 +27,5 @@ The launcher fetches the script list from this repo and lets you run any script 
 
 - All changes are **client-side only** — other players see your real appearance.
 - Tested on Delta executor (mobile).
+- Every script has a **"-" (minimize) button** on its title bar — collapses the menu to a small bar; tap again to expand.
+- Selections are **auto-saved** to `VBLConfig.json` (Delta workspace) when you press APPLY, and **auto-restored** the next time you run the script — no need to re-setup each session.

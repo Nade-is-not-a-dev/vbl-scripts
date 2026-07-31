@@ -16,6 +16,7 @@ The launcher fetches the script list from this repo and lets you run any script 
 
 | File | What it does |
 |---|---|
+| `gui_framework.lua` | Shared modern GUI framework: rounded windows with gradient title bars, smooth open/minimize/close tweens, drag support, hover effects, and a built-in notification system (`GUI.Notify`). Auto-loaded by every script from this repo. |
 | `BallSkinChanger.lua` | Swaps the visual of every spawned ball to a skin of your choice (local-only). |
 | `JerseyChanger.lua` | Shows a jersey of your choice on your character using the game's own `Tools.Jersey` (local-only, re-applies on respawn). |
 | `PlayerCardSpoofer.lua` | Swaps the PlayerCard shown on your score card (FlashPlayerCard) to any other card variant (local-only). |
@@ -27,5 +28,6 @@ The launcher fetches the script list from this repo and lets you run any script 
 
 - All changes are **client-side only** — other players see your real appearance.
 - Tested on Delta executor (mobile).
-- Every script has a **"-" (minimize) button** on its title bar — collapses the menu to a small bar; tap again to expand.
+- Every script uses the **modern GUI framework** (see above): dark themed windows with a gradient accent title bar, **"-" minimize button** and **"X" close button** on the title bar, drag-to-move, and animated open/close.
+- A **notification popup** slides in at the bottom of the screen (green = success, red = error, blue = info) when you APPLY, RESET, or restore a saved selection.
 - Selections are **auto-saved** to `VBLConfig.json` (Delta workspace) when you press APPLY, and **auto-restored** the next time you run the script — no need to re-setup each session.

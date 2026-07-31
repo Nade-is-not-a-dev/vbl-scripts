@@ -68,150 +68,48 @@ local function runScript(name)
 	return true
 end
 
--- ---------- GUI ----------
-local gui = Instance.new("ScreenGui")
-gui.Name = "VBLLauncher"
-gui.ResetOnSpawn = false
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-gui.Parent = pg
+-- ---------- GUI framework (fetched from repo) ----------
+local _fw = fetch(RAW_URL .. "gui_framework.lua")
+local GUI = _fw and loadstring(_fw)()
+assert(GUI, "Failed to load GUI framework - check connection")
 
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 280, 0, 240)
-frame.Position = UDim2.new(0.5, -140, 0, 30)
-frame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-frame.BorderSizePixel = 0
-frame.Active = true
-frame.Parent = gui
+-- ---------- GUI (framework) ----------
+local win = GUI.Window({
+	title = "VBL Script Launcher",
+	name = "VBLLauncher",
+	size = Vector2.new(280, 240),
+	y = 30,
+})
+local frame = win.Content
 
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 10)
-corner.Parent = frame
-
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 30)
-title.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-title.BorderSizePixel = 0
-title.Text = "VBL Script Launcher"
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.Font = Enum.Font.GothamBold
-title.TextSize = 13
-title.Parent = frame
-
-local titleCorner = Instance.new("UICorner")
-titleCorner.CornerRadius = UDim.new(0, 10)
-titleCorner.Parent = title
-
-local titleFix = Instance.new("Frame")
-titleFix.Size = UDim2.new(1, 0, 0, 12)
-titleFix.Position = UDim2.new(0, 0, 1, -12)
-titleFix.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-titleFix.BorderSizePixel = 0
-titleFix.Parent = title
-
-local minBtn = Instance.new("TextButton")
-minBtn.Size = UDim2.new(0, 24, 0, 22)
-minBtn.Position = UDim2.new(1, -28, 0, 4)
-minBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-minBtn.BorderSizePixel = 0
-minBtn.Text = "-"
-minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-minBtn.Font = Enum.Font.GothamBold
-minBtn.TextSize = 14
-minBtn.AutoButtonColor = false
-minBtn.Parent = title
-
-local mCorner = Instance.new("UICorner")
-mCorner.CornerRadius = UDim.new(0, 6)
-mCorner.Parent = minBtn
-
-local minimized = false
-local fullFrameSize = frame.Size
-local function setMinimized(min)
-	minimized = min
-	frame.Size = min and UDim2.new(frame.Size.X.Scale, frame.Size.X.Offset, 0, 30) or fullFrameSize
-	for _, child in ipairs(frame:GetChildren()) do
-		if child ~= title then
-			child.Visible = not min
-		end
-	end
-end
-minBtn.MouseButton1Click:Connect(function()
-	setMinimized(not minimized)
-end)
-
-local status = Instance.new("TextLabel")
-status.Size = UDim2.new(1, -16, 0, 16)
-status.Position = UDim2.new(0, 8, 0, 34)
-status.BackgroundTransparency = 1
-status.Text = "Loading script list..."
-status.TextColor3 = Color3.fromRGB(220, 220, 220)
-status.Font = Enum.Font.Code
-status.TextSize = 11
-status.TextXAlignment = Enum.TextXAlignment.Left
-status.Parent = frame
-
-local refreshBtn = Instance.new("TextButton")
-refreshBtn.Size = UDim2.new(0, 100, 0, 24)
-refreshBtn.Position = UDim2.new(0, 8, 0, 52)
-refreshBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-refreshBtn.BorderSizePixel = 0
-refreshBtn.Text = "REFRESH"
-refreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-refreshBtn.Font = Enum.Font.GothamMedium
-refreshBtn.TextSize = 11
-refreshBtn.AutoButtonColor = false
-refreshBtn.Parent = frame
-
-local closeBtn = Instance.new("TextButton")
-closeBtn.Size = UDim2.new(0, 60, 0, 24)
-closeBtn.Position = UDim2.new(0, 212, 0, 52)
-closeBtn.BackgroundColor3 = Color3.fromRGB(190, 70, 70)
-closeBtn.BorderSizePixel = 0
-closeBtn.Text = "CLOSE"
-closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeBtn.Font = Enum.Font.GothamMedium
-closeBtn.TextSize = 11
-closeBtn.AutoButtonColor = false
-closeBtn.Parent = frame
+local status = GUI.Label(frame, "Loading script list...", UDim2.new(0, 10, 0, 6), UDim2.new(1, -20, 0, 16))
+local refreshBtn = GUI.Button(frame, "REFRESH", UDim2.new(0, 10, 0, 26), UDim2.new(0, 100, 0, 24))
 
 local listFrame = Instance.new("ScrollingFrame")
-listFrame.Size = UDim2.new(1, -16, 1, -88)
-listFrame.Position = UDim2.new(0, 8, 0, 80)
-listFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
+listFrame.Size = UDim2.new(1, -20, 1, -66)
+listFrame.Position = UDim2.new(0, 10, 0, 56)
+listFrame.BackgroundColor3 = GUI.Theme.input
 listFrame.BorderSizePixel = 0
 listFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 listFrame.ScrollBarThickness = 4
 listFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
 listFrame.Parent = frame
-
 local listCorner = Instance.new("UICorner")
 listCorner.CornerRadius = UDim.new(0, 6)
 listCorner.Parent = listFrame
 
 local function addScriptButton(name, index)
-	local b = Instance.new("TextButton")
-	b.Size = UDim2.new(1, -8, 0, 26)
-	b.Position = UDim2.new(0, 4, 0, (index - 1) * 30)
-	b.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-	b.BorderSizePixel = 0
-	b.Text = name:gsub("%.lua$", "")
-	b.TextColor3 = Color3.fromRGB(255, 255, 255)
-	b.Font = Enum.Font.GothamMedium
-	b.TextSize = 11
-	b.AutoButtonColor = false
-	b.Parent = listFrame
-
-	local bc = Instance.new("UICorner")
-	bc.CornerRadius = UDim.new(0, 6)
-	bc.Parent = b
-
+	local b = GUI.Button(listFrame, name:gsub("%.lua$", ""),
+		UDim2.new(0, 4, 0, (index - 1) * 30), UDim2.new(1, -8, 0, 26))
 	b.MouseButton1Click:Connect(function()
 		status.Text = "Running " .. name .. "..."
 		local ok = runScript(name)
 		if ok then
 			status.Text = "Started: " .. name
+			GUI.Notify("Started: " .. name, "success")
 		else
 			status.Text = "Failed: " .. name .. " (see console)"
+			GUI.Notify("Failed to run: " .. name, "error")
 		end
 	end)
 end
@@ -225,6 +123,7 @@ local function renderList()
 	local list = getScripts()
 	if not list then
 		status.Text = "Failed to fetch repo list"
+		GUI.Notify("Failed to fetch repo list", "error")
 		return
 	end
 	for i, name in ipairs(list) do
@@ -234,42 +133,5 @@ local function renderList()
 end
 
 refreshBtn.MouseButton1Click:Connect(renderList)
-
-closeBtn.MouseButton1Click:Connect(function()
-	gui:Destroy()
-end)
-
--- Draggable
-local dragging = false
-local dragStart, startPos
-
-title.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1
-	or input.UserInputType == Enum.UserInputType.Touch then
-		dragging = true
-		dragStart = input.Position
-		startPos = frame.Position
-	end
-end)
-
-title.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1
-	or input.UserInputType == Enum.UserInputType.Touch then
-		dragging = false
-	end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
-	or input.UserInputType == Enum.UserInputType.Touch) then
-		local delta = input.Position - dragStart
-		frame.Position = UDim2.new(
-			startPos.X.Scale,
-			startPos.X.Offset + delta.X,
-			startPos.Y.Scale,
-			startPos.Y.Offset + delta.Y
-		)
-	end
-end)
 
 renderList()

@@ -26,7 +26,7 @@ GUI.Theme = {
 }
 
 local function tweenInfo(t, e, d)
-	return TweenInfo.new(t, e or Enum.EasingStyle.Out, d or Enum.EasingDirection.InOut)
+	return TweenInfo.new(t, e or Enum.EasingStyle.Quad, d or Enum.EasingDirection.InOut)
 end
 
 local function rounded(inst, r)
@@ -120,11 +120,11 @@ function GUI.Window(opts)
 		b.AutoButtonColor = false
 		rounded(b, 6)
 		b.Parent = titlebar
-		local hoverIn = TweenService:Create(b, tweenInfo(0.15, Enum.EasingStyle.Out, Enum.EasingDirection.Quad), {
+		local hoverIn = TweenService:Create(b, tweenInfo(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Quad), {
 			BackgroundColor3 = danger and GUI.Theme.danger or GUI.Theme.accentDark,
 			TextColor3 = Color3.new(1, 1, 1),
 		})
-		local hoverOut = TweenService:Create(b, tweenInfo(0.2, Enum.EasingStyle.Out, Enum.EasingDirection.Quad), {
+		local hoverOut = TweenService:Create(b, tweenInfo(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Quad), {
 			BackgroundColor3 = GUI.Theme.bg,
 			TextColor3 = GUI.Theme.dim,
 		})
@@ -178,10 +178,10 @@ function GUI.Window(opts)
 	window.Open = function()
 		root.Size = UDim2.fromOffset(size.X * 0.96, size.Y * 0.96)
 		root.Position = basePos + UDim2.new(0, size.X * 0.02, 0, 6)
-		TweenService:Create(root, tweenInfo(0.3, Enum.EasingStyle.Out, Enum.EasingDirection.Back), {
+		TweenService:Create(root, tweenInfo(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Back), {
 			Size = UDim2.fromOffset(size.X, size.Y),
 		}):Play()
-		TweenService:Create(root, tweenInfo(0.3, Enum.EasingStyle.Out, Enum.EasingDirection.Quad), {
+		TweenService:Create(root, tweenInfo(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Quad), {
 			Position = basePos,
 			GroupTransparency = 0,
 		}):Play()
@@ -190,10 +190,10 @@ function GUI.Window(opts)
 	window.Close = function()
 		if window._closed then return end
 		window._closed = true
-		local f = TweenService:Create(root, tweenInfo(0.2, Enum.EasingStyle.Out, Enum.EasingDirection.Quad), {
+		local f = TweenService:Create(root, tweenInfo(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Quad), {
 			GroupTransparency = 1,
 		})
-		local s = TweenService:Create(root, tweenInfo(0.2, Enum.EasingStyle.Out, Enum.EasingDirection.Quad), {
+		local s = TweenService:Create(root, tweenInfo(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Quad), {
 			Size = UDim2.fromOffset(size.X * 0.95, size.Y * 0.95),
 		})
 		f:Play()
@@ -258,10 +258,10 @@ function GUI.Button(parent, text, pos, size, opts)
 	rounded(b, opts.radius or 7)
 	b.Parent = parent
 	local base = opts.color or GUI.Theme.elevated
-	local hoverIn = TweenService:Create(b, tweenInfo(0.15, Enum.EasingStyle.Out, Enum.EasingDirection.Quad), {
+	local hoverIn = TweenService:Create(b, tweenInfo(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Quad), {
 		BackgroundColor3 = base:Lerp(GUI.Theme.accent, 0.22),
 	})
-	local hoverOut = TweenService:Create(b, tweenInfo(0.2, Enum.EasingStyle.Out, Enum.EasingDirection.Quad), {
+	local hoverOut = TweenService:Create(b, tweenInfo(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Quad), {
 		BackgroundColor3 = base,
 	})
 	b.MouseEnter:Connect(function() hoverOut:Cancel() hoverIn:Play() end)
@@ -360,10 +360,10 @@ function GUI._notifyLoop()
 
 		local targetPos = UDim2.new(0.5, -130, 1, -60)
 		n.Position = targetPos + UDim2.new(0, 0, 0, 14)
-		TweenService:Create(n, tweenInfo(0.25, Enum.EasingStyle.Out, Enum.EasingDirection.Quad), {
+		TweenService:Create(n, tweenInfo(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Quad), {
 			GroupTransparency = 0,
 		}):Play()
-		TweenService:Create(n, tweenInfo(0.32, Enum.EasingStyle.Out, Enum.EasingDirection.Back), {
+		TweenService:Create(n, tweenInfo(0.32, Enum.EasingStyle.Quad, Enum.EasingDirection.Back), {
 			Position = targetPos,
 		}):Play()
 

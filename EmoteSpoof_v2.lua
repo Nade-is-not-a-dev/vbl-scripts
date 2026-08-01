@@ -139,60 +139,105 @@ end
 -- path 0 (main): AnimationController:PlayAnimation is called on EVERY emote
 -- trigger (wheel, quick chat, chat command) and is NOT cached, unlike
 -- Animator:LoadAnimation (tracks live in LoadedAnimations after first load).
-local animCtrl = nil
+local animCtls = {}          -- every AnimationController instance we could hook
+local playLog = 0
 local function installPlayHook()
 	local ok, knit = pcall(require, ReplicatedStorage.Packages.Knit)
 	if not ok or type(knit) ~= "table" then
 		log("PLAY HOOK FAILED: Knit not accessible")
 		return
 	end
-	local ok2, ctrl = pcall(function()
-		return knit.GetController("AnimationController")
+	local okList, controllers = pcall(function()
+		return knit.GetControllers()
 	end)
-	if not ok2 or type(ctrl) ~= "table" or type(ctrl.PlayAnimation) ~= "function" then
-		log("PLAY HOOK FAILED: AnimationController not accessible")
+	if not okList or type(controllers) ~= "table" or not next(controllers) then
+		log("PLAY HOOK FAILED: GetControllers() returned nothing")
 		return
 	end
-	animCtrl = ctrl
-	local orig = ctrl.PlayAnimation
-	local ok3, err = pcall(function()
-		ctrl.PlayAnimation = hookfunction(orig, newcclosure(function(self, name, ...)
-			if stillMine() and target and type(name) == "string"
-			and emoteIds[name] and name ~= target.id then
-				log("PLAY: " .. name .. " -> " .. target.id)
-				local res = orig(self, target.id, ...)
-				-- the caller (EmoteWheel) reads GetAnimationLength(name) to
-				-- schedule StopEmotes; mirror the loaded track under the
-				-- original name so it finds a length and doesn't stop us at 0s
-				local lc = ctrl.LoadedAnimations
-				if type(lc) == "table" and lc[target.id] and not lc[name] then
-					lc[name] = lc[target.id]
-					log("MIRROR: LoadedAnimations[" .. tostring(name) .. "] -> " .. tostring(target.id))
-				end
-				return res
+	local hooked = 0
+	for _, ctrl in pairs(controllers) do
+		if type(ctrl) == "table" and type(ctrl.PlayAnimation) == "function" then
+			animCtls[ctrl] = true
+			local orig = ctrl.PlayAnimation
+			local okHook, err = pcall(function()
+				ctrl.PlayAnimation = hookfunction(orig, newcclosure(function(self, name, ...)
+					if stillMine() then
+						if playLog < 20 then
+							playLog = playLog + 1
+							log("PLAY CALL: " .. tostring(name)
+								.. " known=" .. tostring(emoteIds[name] ~= nil)
+								.. " target=" .. tostring(target and target.id or "none"))
+						end
+						if target and type(name) == "string"
+						and emoteIds[name] and name ~= target.id then
+							log("PLAY: " .. name .. " -> " .. target.id)
+							local res = orig(self, target.id, ...)
+							-- caller reads GetAnimationLength(name); mirror the
+							-- loaded track under the original name
+							local lc = ctrl.LoadedAnimations
+							if type(lc) == "table" and lc[target.id] and not lc[name] then
+								lc[name] = lc[target.id]
+								log("MIRROR: LoadedAnimations[" .. tostring(name) .. "] -> " .. tostring(target.id))
+							end
+							return res
+						end
+					end
+					return orig(self, name, ...)
+				end))
+			end)
+			if okHook then
+				hooked = hooked + 1
+			else
+				log("PLAY HOOK FAILED on one controller: " .. tostring(err))
 			end
-			return orig(self, name, ...)
-		end))
-	end)
-	if not ok3 then
-		log("PLAY HOOK FAILED: " .. tostring(err))
-		return
+		end
 	end
-	log("PLAY HOOK installed: AnimationController:PlayAnimation patched")
+	log("PLAY HOOK installed: " .. hooked .. " AnimationController(s) patched")
+end
+
+-- keep the emote cache empty while spoofing so the game always goes through
+-- Animator:LoadAnimation (our LoadAnimation hook swaps it), no matter which
+-- controller instance the wheel actually uses
+local function startCacheSweep()
+	task.spawn(function()
+		while true do
+			task.wait(0.5)
+			if not stillMine() then return end
+			if target then
+				local removed = 0
+				for ctrl in pairs(animCtls) do
+					local lc = ctrl.LoadedAnimations
+					if type(lc) == "table" then
+						for id in pairs(emoteIds) do
+							if lc[id] then
+								lc[id] = nil
+								removed = removed + 1
+							end
+						end
+					end
+				end
+				if removed > 0 then
+					log("CACHE SWEEP: removed " .. removed .. " emote track(s)")
+				end
+			end
+		end
+	end)
 end
 
 local function flushCache()
-	if not animCtrl or type(animCtrl.LoadedAnimations) ~= "table" then return end
-	local n = 0
-	for _, e in ipairs(emotes) do
-		if animCtrl.LoadedAnimations[e.id] then
-			animCtrl.LoadedAnimations[e.id] = nil
-			n = n + 1
+	local removed = 0
+	for ctrl in pairs(animCtls) do
+		local lc = ctrl.LoadedAnimations
+		if type(lc) == "table" then
+			for id in pairs(emoteIds) do
+				if lc[id] then
+					lc[id] = nil
+					removed = removed + 1
+				end
+			end
 		end
 	end
-	if n > 0 then
-		log("CACHE: flushed " .. n .. " emote tracks")
-	end
+	log("CACHE: flushed " .. removed .. " emote tracks")
 end
 
 -- path 1 (main): patch the Animation instance before Animator loads it
@@ -239,15 +284,21 @@ end
 
 -- path 2 (backup): stop + replay anything that already played unpatched
 local attached = {}
+local playedLog = 0
 local function attachAnimator(animator)
 	if attached[animator] then return end
 	attached[animator] = true
 	animator.AnimationPlayed:Connect(function(track, anim)
 		if not stillMine() then return end
+		local id = typeof(anim) == "Instance" and anim:IsA("Animation") and anim.AnimationId or nil
+		if type(id) == "string" then
+			playedLog = playedLog + 1
+			if playedLog <= 15 then
+				log("PLAYED: " .. id .. " (spoof=" .. tostring(target and id == target.asset) .. ")")
+			end
+		end
 		if not target then return end
-		if typeof(anim) ~= "Instance" or not anim:IsA("Animation") then return end
-		local id = anim.AnimationId
-		if typeof(id) ~= "string" or not emoteAssets[id] then return end
+		if type(id) ~= "string" or not emoteAssets[id] then return end
 		if id == target.asset then return end
 		log("AP backup: " .. id .. " -> " .. target.asset)
 		track:Stop()
@@ -330,12 +381,34 @@ local function updateStatus()
 	end
 end
 
+-- self-test: can the target animation actually load? logs its length
+local function testTarget()
+	if not target then return end
+	local char = lp.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	local animator = hum and hum:FindFirstChildOfClass("Animator")
+	if not animator then
+		log("SELFTEST skipped: no animator yet")
+		return
+	end
+	pcall(function()
+		local a = Instance.new("Animation")
+		a.AnimationId = target.asset
+		a.Parent = animator
+		local tr = animator:LoadAnimation(a)
+		log("SELFTEST: " .. target.name .. " loaded, Length=" .. tostring(tr and tr.Length or "nil"))
+		if tr then tr:Stop() tr:Destroy() end
+		a:Destroy()
+	end)
+end
+
 local function applyEmote(name)
 	for _, e in ipairs(emotes) do
 		if e.name == name or e.id == name then
 			target = { id = e.id, name = e.name, asset = e.asset }
 			log("APPLY: " .. e.name .. " (" .. e.asset .. ")")
 			flushCache()
+			task.delay(1, testTarget)
 			updateStatus()
 			config.EmoteSpoof = { selected = e.name }
 			saveConfig()
@@ -404,6 +477,7 @@ end)
 -- ---------- init ----------
 loadEmotes()
 installPlayHook()
+startCacheSweep()
 if #emotes == 0 then
 	status.Text = "No emotes found"
 else

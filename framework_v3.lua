@@ -376,35 +376,30 @@ function GUI.PrepareViewport(vp, view)
 	view.Parent = vp
 	task.spawn(function()
 		pcall(function()
-			local ids = {}
-			local function add(s)
-				if type(s) == "string" and s ~= "" and s:find("rbxasset") and not table.find(ids, s) then
-					table.insert(ids, s)
+			local items = {}
+			local function addInst(inst)
+				if inst and not table.find(items, inst) then
+					table.insert(items, inst)
 				end
 			end
 			for _, d in ipairs(view:GetDescendants()) do
 				if d:IsA("MeshPart") then
-					add(d.MeshId)
-				elseif d:IsA("Part") then
-					local m = d:FindFirstChildOfClass("SpecialMesh")
-					if m then
-						add(m.MeshId)
-						add(m.TextureId)
-					end
-					local t = d:FindFirstChildOfClass("Texture")
-					if t then add(t.Texture) end
-					local dec = d:FindFirstChildOfClass("Decal")
-					if dec then add(dec.Texture) end
+					addInst(d)
+				elseif d:IsA("SpecialMesh") then
+					addInst(d)
+				elseif d:IsA("Texture") or d:IsA("Decal") then
+					addInst(d)
 				elseif d:IsA("Shirt") or d:IsA("Pants") then
-					pcall(function() add(d.ShirtTemplate) end)
-					pcall(function() add(d.Texture) end)
+					addInst(d)
 				elseif d:IsA("ImageLabel") then
-					add(d.Image)
+					addInst(d)
 				end
 			end
-			if #ids > 0 then
-				ContentProvider:PreloadAsync(ids)
+			if #items > 0 then
+				ContentProvider:PreloadAsync(items)
 			end
+			view.Parent = nil
+			view.Parent = vp
 		end)
 	end)
 end

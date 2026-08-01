@@ -7,7 +7,7 @@ Client-side scripts for Volleyball Legends (Roblox), made to run in Delta execut
 Paste this one-liner into your executor to open the script launcher menu:
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/Nade-is-not-a-dev/vbl-scripts/main/Launcher.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Nade-is-not-a-dev/vbl-scripts/main/Launcher.lua?v=2"))()
 ```
 
 The launcher fetches the script list from this repo and lets you run any script with one tap.

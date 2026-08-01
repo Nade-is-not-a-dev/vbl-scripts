@@ -42,7 +42,9 @@ local function getScripts()
 	local list = {}
 	for _, item in ipairs(data) do
 		if type(item) == "table" and item.type == "file" and item.name:sub(-4) == ".lua"
-		and item.name ~= "Launcher.lua" then
+		and item.name ~= "Launcher.lua"
+		and item.name ~= "gui_framework.lua"
+		and item.name ~= "vbl_framework.lua" then
 			table.insert(list, item.name)
 		end
 	end
@@ -69,7 +71,7 @@ local function runScript(name)
 end
 
 -- ---------- GUI framework (fetched from repo) ----------
-local _fw = fetch(RAW_URL .. "gui_framework.lua?cb=" .. tostring(os.time()))
+local _fw = fetch(RAW_URL .. "vbl_framework.lua?cb=" .. tostring(os.time()))
 local GUI = _fw and loadstring(_fw)()
 assert(GUI, "Failed to load GUI framework - check connection")
 

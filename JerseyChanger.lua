@@ -1,7 +1,7 @@
 -- Jersey Changer (client-side, Volleyball Legends)
--- Re-applies a jersey of your choice to your character using the game's
--- own Tools.Jersey module. Local-only: you see the chosen jersey,
--- other players see your real one. Re-applied on respawn.
+-- Simple mode: pick a jersey (or swap with < / >), the color variant is
+-- chosen randomly ONCE per jersey and then LOCKED (always the same color,
+-- even after respawn). No color picker for the user.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -73,43 +73,26 @@ end
 local jerseys = {}
 local jerseyIndex = 0
 local selectedId = nil
-local lastTeamName = "White Team"
+local pickedTeam = nil
 
--- ---------- team color mapping ----------
-local TEAM_COLORS = {
-	{ "Red Team", Color3.fromRGB(255, 48, 48) },
-	{ "Purple Team", Color3.fromRGB(170, 0, 255) },
-	{ "White Team", Color3.fromRGB(255, 255, 255) },
-	{ "Black Team", Color3.fromRGB(56, 70, 79) },
-	{ "Orange Team", Color3.fromRGB(255, 162, 0) },
-}
-local function nearestTeamName()
-	local team = lp.Team
-	if not team or not team.TeamColor then return nil end
-	local c = team.TeamColor.Color
-	local best, bestD = nil, math.huge
-	for _, v in ipairs(TEAM_COLORS) do
-		local d = (v[2].R - c.R) ^ 2 + (v[2].G - c.G) ^ 2 + (v[2].B - c.B) ^ 2
-		if d < bestD then
-			bestD = d
-			best = v[1]
+-- pick a color variant ONCE per jersey: the game resolves a TeamName to one
+-- fixed texture set, so locking the TeamName keeps the color stable forever
+local function pickTeamFor(renderId)
+	local assets = ReplicatedStorage:FindFirstChild("Assets")
+	local jf = assets and assets:FindFirstChild("Jersey")
+	local asset = jf and jf:FindFirstChild(renderId)
+	if asset then
+		local variants = {}
+		for _, c in ipairs(asset:GetChildren()) do
+			if c:IsA("Model") and c.Name:find("Team") then
+				table.insert(variants, c.Name)
+			end
+		end
+		if #variants > 0 then
+			return variants[math.random(#variants)]
 		end
 	end
-	return best
-end
-local function resolveTeamName(text)
-	if not text or text == "" then return nil end
-	local u = text:upper()
-	if u == "RANDOM" then return nil end
-	if u == "AUTO" then
-		local mapped = nearestTeamName()
-		if mapped then
-			lastTeamName = mapped
-			return mapped
-		end
-		return lastTeamName
-	end
-	return text
+	return "White Team"
 end
 
 -- ---------- deep logging ----------
@@ -238,9 +221,8 @@ local function applyJersey(id)
 			setArgs.Name = sName
 			setArgs.Number = sNumber
 		end
-		local teamName = resolveTeamName(currentTeam or (teamBox and teamBox.Text or ""))
-		if teamName then
-			setArgs.TeamName = teamName
+		if pickedTeam then
+			setArgs.TeamName = pickedTeam
 		end
 		JerseyTool.set(setArgs)
 	end)
@@ -248,11 +230,8 @@ local function applyJersey(id)
 	if ok then
 		selectedId = id
 		captureShirt()
-		local resolvedTeam = resolveTeamName(currentTeam or (teamBox and teamBox.Text or ""))
 		log("APPLY ok id=" .. tostring(id)
-			.. " team=" .. tostring(resolvedTeam or "RANDOM")
-			.. " (current=" .. tostring(currentTeam)
-			.. " box=" .. tostring(teamBox and teamBox.Text or "?") .. ")"
+			.. " team=" .. tostring(pickedTeam or "none")
 			.. " shirt=" .. tostring(appliedShirt and appliedShirt.t or "none"))
 	else
 		status.Text = "Apply failed: " .. tostring(err)
@@ -280,14 +259,6 @@ local function restoreJersey()
 		end
 	end)
 	status.Text = "Restored - real jersey will return"
-end
-
-local function updateStatus()
-	if selectedId then
-		status.Text = "Jersey -> " .. selectedId
-	else
-		status.Text = "OFF - your real jersey shows"
-	end
 end
 
 -- re-apply after respawn (new character arrives with your real jersey)
@@ -328,33 +299,18 @@ local frame = win.Content
 
 local status = GUI.Label(frame, "Loading jerseys...", UDim2.new(0, 10, 0, 8), UDim2.new(1, -20, 0, 16))
 local nameBox = GUI.Input(frame, "ClassicJersey", UDim2.new(0, 10, 0, 28), UDim2.new(1, -20, 0, 26))
-local teams = { "RANDOM", "AUTO", "White Team", "Red Team", "Purple Team", "Orange Team", "Black Team" }
-local teamIndex = 1
-local teamBox = GUI.Input(frame, "RANDOM", UDim2.new(0, 44, 0, 58), UDim2.new(1, -54, 0, 26))
-local teamCycleBtn = GUI.Button(frame, "COLOR", UDim2.new(0, 10, 0, 58), UDim2.new(0, 30, 0, 26))
-local currentTeam = "RANDOM"
-teamCycleBtn.MouseButton1Click:Connect(function()
-	teamIndex = teamIndex % #teams + 1
-	teamBox.Text = teams[teamIndex]
-	currentTeam = teams[teamIndex]
-	log("TEAM SET via COLOR: " .. tostring(currentTeam))
-end)
-teamBox.FocusLost:Connect(function(enter)
-	currentTeam = teamBox.Text
-	log("TEAM SET via textbox" .. (enter and " (enter)" or "") .. ": " .. tostring(currentTeam))
-end)
-log("GUI: teamBox=" .. tostring(teamBox) .. " currentTeam=" .. tostring(currentTeam))
-local prevBtn = GUI.Button(frame, "<", UDim2.new(0, 10, 0, 92), UDim2.new(0, 30, 0, 26))
-local nextBtn = GUI.Button(frame, ">", UDim2.new(0, 44, 0, 92), UDim2.new(0, 30, 0, 26))
-local listBtn = GUI.Button(frame, "LIST", UDim2.new(0, 78, 0, 92), UDim2.new(0, 42, 0, 26))
-local applyBtn = GUI.Button(frame, "APPLY", UDim2.new(0, 124, 0, 92), UDim2.new(0, 80, 0, 26), { color = GUI.Theme.success })
-local resetBtn = GUI.Button(frame, "RESET", UDim2.new(0, 208, 0, 92), UDim2.new(0, 52, 0, 26), { color = GUI.Theme.danger })
+log("GUI: nameBox=" .. tostring(nameBox) .. " pickedTeam=" .. tostring(pickedTeam))
+local prevBtn = GUI.Button(frame, "<", UDim2.new(0, 10, 0, 58), UDim2.new(0, 30, 0, 26))
+local nextBtn = GUI.Button(frame, ">", UDim2.new(0, 44, 0, 58), UDim2.new(0, 30, 0, 26))
+local listBtn = GUI.Button(frame, "LIST", UDim2.new(0, 78, 0, 58), UDim2.new(0, 42, 0, 26))
+local applyBtn = GUI.Button(frame, "APPLY", UDim2.new(0, 124, 0, 58), UDim2.new(0, 80, 0, 26), { color = GUI.Theme.success })
+local resetBtn = GUI.Button(frame, "RESET", UDim2.new(0, 208, 0, 58), UDim2.new(0, 52, 0, 26), { color = GUI.Theme.danger })
 
 local hint = Instance.new("TextLabel")
 hint.Size = UDim2.new(1, -16, 0, 14)
 hint.Position = UDim2.new(0, 8, 1, -42)
 hint.BackgroundTransparency = 1
-hint.Text = "COLOR = variant | AUTO = follow team | RANDOM = any"
+hint.Text = "Color variant is random but stays locked"
 hint.TextColor3 = Color3.fromRGB(150, 150, 160)
 hint.Font = Enum.Font.Code
 hint.TextSize = 9
@@ -362,12 +318,27 @@ hint.TextXAlignment = Enum.TextXAlignment.Left
 hint.Parent = frame
 
 -- ---------- buttons ----------
+local function getJerseyById(id)
+	for _, j in ipairs(jerseys) do
+		if j.id == id then return j end
+	end
+	return nil
+end
+
+local function pickVariantFor(id)
+	local j = getJerseyById(id)
+	local team = pickTeamFor(j and (j.renderId or j.id) or id)
+	pickedTeam = team
+	log("VARIANT picked: " .. tostring(id) .. " -> " .. tostring(team))
+	return team
+end
+
 prevBtn.MouseButton1Click:Connect(function()
 	if #jerseys == 0 then return end
 	jerseyIndex = jerseyIndex - 1
 	if jerseyIndex < 1 then jerseyIndex = #jerseys end
 	nameBox.Text = jerseys[jerseyIndex].id
-	updateStatus()
+	applyById(nameBox.Text)
 end)
 
 nextBtn.MouseButton1Click:Connect(function()
@@ -375,13 +346,16 @@ nextBtn.MouseButton1Click:Connect(function()
 	jerseyIndex = jerseyIndex + 1
 	if jerseyIndex > #jerseys then jerseyIndex = 1 end
 	nameBox.Text = jerseys[jerseyIndex].id
-	updateStatus()
+	applyById(nameBox.Text)
 end)
 
 local function applyById(id)
+	if not pickedTeam then
+		pickVariantFor(id)
+	end
 	if applyJersey(id) then
 		status.Text = "Jersey -> " .. id
-		config.JerseyChanger = { selected = id, team = currentTeam or teamBox.Text }
+		config.JerseyChanger = { selected = id, team = pickedTeam }
 		saveConfig()
 		GUI.Notify("Jersey applied: " .. id, "success")
 		return true
@@ -411,6 +385,7 @@ local previewList = GUI.PreviewList({
 	onPick = function(id)
 		nameBox.Text = id
 		log("LIST pick: " .. tostring(id))
+		pickVariantFor(id)
 		applyById(id)
 	end,
 })
@@ -419,8 +394,7 @@ listBtn.MouseButton1Click:Connect(function()
 	if #previewItems == 0 then
 		log("LIST: building preview items from " .. #jerseys .. " jerseys")
 		for _, j in ipairs(jerseys) do
-			local teamName = resolveTeamName(currentTeam or (teamBox and teamBox.Text or "")) or "White Team"
-			local thumb = GUI.JerseyThumbnail(j.renderId or j.id, teamName)
+			local thumb = GUI.JerseyThumbnail(j.renderId or j.id, pickTeamFor(j.renderId or j.id))
 			local entry = {
 				id = j.id,
 				name = j.name,
@@ -457,12 +431,14 @@ if saved and type(saved) == "string" then
 	end
 	if found then
 		nameBox.Text = saved
-		if config.JerseyChanger.team and type(config.JerseyChanger.team) == "string"
-		and config.JerseyChanger.team ~= "" then
-			teamBox.Text = config.JerseyChanger.team
-			currentTeam = config.JerseyChanger.team
+		local j = getJerseyById(saved)
+		local cfgTeam = config.JerseyChanger.team
+		if type(cfgTeam) == "string" and cfgTeam ~= "" then
+			pickedTeam = cfgTeam
+		else
+			pickVariantFor(saved)
 		end
-		log("INIT restore: saved=" .. tostring(saved) .. " team=" .. tostring(config.JerseyChanger.team or "nil"))
+		log("INIT restore: saved=" .. tostring(saved) .. " team=" .. tostring(pickedTeam))
 		selectedId = saved
 		applyJersey(saved)
 		status.Text = "Restored saved jersey -> " .. saved
@@ -481,12 +457,11 @@ if JerseyTool and JerseyTool.set then
 				log("HOOK(game) set called: id=" .. tostring(p9.Id)
 					.. " team=" .. tostring(p9.TeamName)
 					.. " (we force id=" .. tostring(selectedId)
-					.. " team=" .. tostring(teamBox and teamBox.Text or "?"))
+					.. " team=" .. tostring(pickedTeam))
 			end
 			p9.Id = selectedId
-			local teamName = resolveTeamName(currentTeam or (teamBox and teamBox.Text or ""))
-			if teamName then
-				p9.TeamName = teamName
+			if pickedTeam then
+				p9.TeamName = pickedTeam
 			end
 			local sName, sNumber = getStyleInfo()
 			if sName and sNumber then

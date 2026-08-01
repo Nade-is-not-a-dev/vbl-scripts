@@ -73,8 +73,9 @@ local status = GUI.Label(frame, "Loading skins...", UDim2.new(0, 10, 0, 8), UDim
 local nameBox = GUI.Input(frame, "ClassicBall", UDim2.new(0, 10, 0, 28), UDim2.new(1, -20, 0, 26))
 local prevBtn = GUI.Button(frame, "<", UDim2.new(0, 10, 0, 62), UDim2.new(0, 30, 0, 26))
 local nextBtn = GUI.Button(frame, ">", UDim2.new(0, 44, 0, 62), UDim2.new(0, 30, 0, 26))
-local applyBtn = GUI.Button(frame, "APPLY", UDim2.new(0, 78, 0, 62), UDim2.new(0, 80, 0, 26), { color = GUI.Theme.success })
-local resetBtn = GUI.Button(frame, "RESET", UDim2.new(0, 162, 0, 62), UDim2.new(0, 52, 0, 26), { color = GUI.Theme.danger })
+local listBtn = GUI.Button(frame, "LIST", UDim2.new(0, 78, 0, 62), UDim2.new(0, 42, 0, 26))
+local applyBtn = GUI.Button(frame, "APPLY", UDim2.new(0, 124, 0, 62), UDim2.new(0, 80, 0, 26), { color = GUI.Theme.success })
+local resetBtn = GUI.Button(frame, "RESET", UDim2.new(0, 208, 0, 62), UDim2.new(0, 52, 0, 26), { color = GUI.Theme.danger })
 
 local hint = Instance.new("TextLabel")
 hint.Size = UDim2.new(1, -16, 0, 14)
@@ -276,6 +277,41 @@ resetBtn.MouseButton1Click:Connect(function()
 		restoreBall(ball)
 	end
 	GUI.Notify("Real ball restored", "info")
+end)
+
+-- ---------- preview list (dropdown) ----------
+local previewItems = {}
+local previewList = GUI.PreviewList({
+	parent = win.Root,
+	position = UDim2.fromOffset(20, win.Root.AbsoluteSize.Y + 4),
+	width = 240,
+	height = 320,
+	title = "Ball Skins",
+	items = previewItems,
+	onPick = function(id)
+		nameBox.Text = id
+		updateStatus()
+		sweep()
+		config.BallSkinChanger = { selected = id }
+		saveConfig()
+		GUI.Notify("Ball skin applied: " .. id, "success")
+	end,
+})
+listBtn.MouseButton1Click:Connect(function()
+	if #skins == 0 then return end
+	if #previewItems == 0 then
+		for _, name in ipairs(skins) do
+			table.insert(previewItems, {
+				id = name,
+				name = name,
+				build = function()
+					return GUI.BuildBallView(name)
+				end,
+				camCFrame = CFrame.lookAt(Vector3.new(0, 1.2, 3.4), Vector3.new(0, 0.6, 0)),
+			})
+		end
+	end
+	previewList.Open()
 end)
 
 loadSkins()

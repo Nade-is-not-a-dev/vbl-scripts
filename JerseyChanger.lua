@@ -118,6 +118,20 @@ local function log(msg)
 end
 log("=== JerseyChanger started === selectedId=" .. tostring(selectedId))
 
+local RARITY_COLORS = {
+	[-2] = Color3.fromRGB(255, 70, 90),
+	[-1] = Color3.new(1, 1, 1),
+	[0] = Color3.fromRGB(255, 90, 180),
+	[1] = Color3.fromRGB(255, 200, 60),
+	[2] = Color3.fromRGB(255, 130, 40),
+	[3] = Color3.fromRGB(200, 110, 255),
+	[4] = Color3.fromRGB(90, 160, 255),
+	[5] = Color3.fromRGB(200, 205, 210),
+}
+local function rarityColor(r)
+	return RARITY_COLORS[r] or Color3.fromRGB(220, 220, 220)
+end
+
 -- ---------- jersey list ----------
 local function loadJerseys()
 	jerseys = {}
@@ -134,6 +148,8 @@ local function loadJerseys()
 					table.insert(jerseys, {
 						id = tostring(item.Id or child.Name),
 						name = tostring(item.DisplayName or child.Name),
+						rarity = item.Rarity,
+						renderId = item.Metadata and item.Metadata.RenderId or nil,
 					})
 				end
 			end
@@ -279,8 +295,9 @@ local teamBox = GUI.Input(frame, "RANDOM", UDim2.new(0, 44, 0, 58), UDim2.new(1,
 local teamCycleBtn = GUI.Button(frame, "COLOR", UDim2.new(0, 10, 0, 58), UDim2.new(0, 30, 0, 26))
 local prevBtn = GUI.Button(frame, "<", UDim2.new(0, 10, 0, 92), UDim2.new(0, 30, 0, 26))
 local nextBtn = GUI.Button(frame, ">", UDim2.new(0, 44, 0, 92), UDim2.new(0, 30, 0, 26))
-local applyBtn = GUI.Button(frame, "APPLY", UDim2.new(0, 78, 0, 92), UDim2.new(0, 80, 0, 26), { color = GUI.Theme.success })
-local resetBtn = GUI.Button(frame, "RESET", UDim2.new(0, 162, 0, 92), UDim2.new(0, 52, 0, 26), { color = GUI.Theme.danger })
+local listBtn = GUI.Button(frame, "LIST", UDim2.new(0, 78, 0, 92), UDim2.new(0, 42, 0, 26))
+local applyBtn = GUI.Button(frame, "APPLY", UDim2.new(0, 124, 0, 92), UDim2.new(0, 80, 0, 26), { color = GUI.Theme.success })
+local resetBtn = GUI.Button(frame, "RESET", UDim2.new(0, 208, 0, 92), UDim2.new(0, 52, 0, 26), { color = GUI.Theme.danger })
 
 teamCycleBtn.MouseButton1Click:Connect(function()
 	teamIndex = teamIndex % #teams + 1
@@ -315,21 +332,59 @@ nextBtn.MouseButton1Click:Connect(function()
 	updateStatus()
 end)
 
-applyBtn.MouseButton1Click:Connect(function()
-	local id = nameBox.Text
+local function applyById(id)
 	if applyJersey(id) then
 		status.Text = "Jersey -> " .. id
 		config.JerseyChanger = { selected = id, team = teamBox.Text }
 		saveConfig()
 		GUI.Notify("Jersey applied: " .. id, "success")
-	else
-		GUI.Notify("Apply failed: " .. id, "error")
+		return true
 	end
+	GUI.Notify("Apply failed: " .. id, "error")
+	return false
+end
+
+applyBtn.MouseButton1Click:Connect(function()
+	applyById(nameBox.Text)
 end)
 
 resetBtn.MouseButton1Click:Connect(function()
 	restoreJersey()
 	GUI.Notify("Real jersey restored", "info")
+end)
+
+-- ---------- preview list (dropdown) ----------
+local previewItems = {}
+local previewList = GUI.PreviewList({
+	parent = win.Root,
+	position = UDim2.fromOffset(20, win.Root.AbsoluteSize.Y + 4),
+	width = 240,
+	height = 320,
+	title = "Jerseys",
+	items = previewItems,
+	onPick = function(id)
+		nameBox.Text = id
+		applyById(id)
+	end,
+})
+listBtn.MouseButton1Click:Connect(function()
+	if #jerseys == 0 then return end
+	if #previewItems == 0 then
+		for _, j in ipairs(jerseys) do
+			local entry = {
+				id = j.id,
+				name = j.name,
+				color = rarityColor(j.rarity),
+				build = function()
+					local teamName = resolveTeamName(teamBox and teamBox.Text or "") or "White Team"
+					return GUI.BuildJerseyView(j.renderId or j.id, teamName)
+				end,
+				camCFrame = CFrame.lookAt(Vector3.new(0, 1.8, 2.9), Vector3.new(0, 1, 0)),
+			}
+			table.insert(previewItems, entry)
+		end
+	end
+	previewList.Open()
 end)
 
 -- ---------- init ----------

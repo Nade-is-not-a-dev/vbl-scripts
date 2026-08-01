@@ -74,6 +74,36 @@ local jerseys = {}
 local jerseyIndex = 0
 local selectedId = nil
 
+-- ---------- team color mapping ----------
+local TEAM_COLORS = {
+	{ "Red Team", Color3.fromRGB(255, 48, 48) },
+	{ "Purple Team", Color3.fromRGB(170, 0, 255) },
+	{ "White Team", Color3.fromRGB(255, 255, 255) },
+	{ "Black Team", Color3.fromRGB(56, 70, 79) },
+	{ "Orange Team", Color3.fromRGB(255, 162, 0) },
+}
+local function nearestTeamName()
+	local team = lp.Team
+	if not team or not team.TeamColor then return nil end
+	local c = team.TeamColor.Color
+	local best, bestD = nil, math.huge
+	for _, v in ipairs(TEAM_COLORS) do
+		local d = (v[2].R - c.R) ^ 2 + (v[2].G - c.G) ^ 2 + (v[2].B - c.B) ^ 2
+		if d < bestD then
+			bestD = d
+			best = v[1]
+		end
+	end
+	return best
+end
+local function resolveTeamName(text)
+	if not text or text == "" then return nil end
+	local u = text:upper()
+	if u == "RANDOM" then return nil end
+	if u == "AUTO" then return nearestTeamName() end
+	return text
+end
+
 -- ---------- deep logging ----------
 local LOG_PATH = "JerseyChanger_log.txt"
 local logbuf = {}
@@ -159,8 +189,9 @@ local function applyJersey(id)
 			setArgs.Name = sName
 			setArgs.Number = sNumber
 		end
-		if teamBox and teamBox.Text ~= "" and teamBox.Text:upper() ~= "RANDOM" then
-			setArgs.TeamName = teamBox.Text
+		local teamName = resolveTeamName(teamBox and teamBox.Text or "")
+		if teamName then
+			setArgs.TeamName = teamName
 		end
 		JerseyTool.set(setArgs)
 	end)
@@ -242,7 +273,7 @@ local frame = win.Content
 
 local status = GUI.Label(frame, "Loading jerseys...", UDim2.new(0, 10, 0, 8), UDim2.new(1, -20, 0, 16))
 local nameBox = GUI.Input(frame, "ClassicJersey", UDim2.new(0, 10, 0, 28), UDim2.new(1, -20, 0, 26))
-local teams = { "RANDOM", "White Team", "Red Team", "Purple Team", "Orange Team", "Black Team" }
+local teams = { "RANDOM", "AUTO", "White Team", "Red Team", "Purple Team", "Orange Team", "Black Team" }
 local teamIndex = 1
 local teamBox = GUI.Input(frame, "RANDOM", UDim2.new(0, 44, 0, 58), UDim2.new(1, -54, 0, 26))
 local teamCycleBtn = GUI.Button(frame, "COLOR", UDim2.new(0, 10, 0, 58), UDim2.new(0, 30, 0, 26))
@@ -260,7 +291,7 @@ local hint = Instance.new("TextLabel")
 hint.Size = UDim2.new(1, -16, 0, 14)
 hint.Position = UDim2.new(0, 8, 1, -42)
 hint.BackgroundTransparency = 1
-hint.Text = "COLOR = jersey color variant | RANDOM = any color"
+hint.Text = "COLOR = variant | AUTO = follow team | RANDOM = any"
 hint.TextColor3 = Color3.fromRGB(150, 150, 160)
 hint.Font = Enum.Font.Code
 hint.TextSize = 9
@@ -349,8 +380,9 @@ if JerseyTool and JerseyTool.set then
 					.. " team=" .. tostring(teamBox and teamBox.Text or "?"))
 			end
 			p9.Id = selectedId
-			if teamBox and teamBox.Text ~= "" and teamBox.Text:upper() ~= "RANDOM" then
-				p9.TeamName = teamBox.Text
+			local teamName = resolveTeamName(teamBox and teamBox.Text or "")
+			if teamName then
+				p9.TeamName = teamName
 			end
 			local sName, sNumber = getStyleInfo()
 			if sName and sNumber then

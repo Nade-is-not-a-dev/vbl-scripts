@@ -178,6 +178,7 @@ end)
 local win = GUI.Window({
 	title = "Jersey Changer",
 	name = "JerseyChanger",
+	icon = "JC",
 	size = Vector2.new(280, 200),
 	y = 90,
 })

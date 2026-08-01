@@ -149,6 +149,7 @@ end
 local win = GUI.Window({
 	title = "Player Card Spoofer",
 	name = "PlayerCardSpoofer",
+	icon = "PC",
 	size = Vector2.new(280, 200),
 	y = 90,
 })

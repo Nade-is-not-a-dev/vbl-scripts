@@ -361,6 +361,7 @@ local function main()
 	local win = GUI.Window({
 		title = "Emote Spoofer",
 		name = "EmoteSpoof",
+		icon = "ES",
 		size = Vector2.new(280, 200),
 		y = 30,
 	})

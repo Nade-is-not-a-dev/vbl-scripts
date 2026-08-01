@@ -77,6 +77,7 @@ assert(GUI, "Failed to load GUI framework - check connection")
 local win = GUI.Window({
 	title = "VBL Script Launcher",
 	name = "VBLLauncher",
+	icon = "VL",
 	size = Vector2.new(280, 240),
 	y = 30,
 })

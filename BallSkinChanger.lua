@@ -63,6 +63,7 @@ local seen = {}
 local win = GUI.Window({
 	title = "Ball Skin Changer",
 	name = "BallSkinChanger",
+	icon = "BS",
 	size = Vector2.new(280, 200),
 	y = 90,
 })

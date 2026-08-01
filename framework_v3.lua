@@ -9,6 +9,9 @@ local pg = Players.LocalPlayer:WaitForChild("PlayerGui")
 
 local GUI = {}
 
+GUI.Version = "1.0.4"
+GUI.Log = function() end
+
 GUI.Theme = {
 	bg = Color3.fromRGB(12, 12, 16),
 	panel = Color3.fromRGB(20, 20, 25),
@@ -368,12 +371,19 @@ end
 
 local ContentProvider = game:GetService("ContentProvider")
 
-function GUI.PrepareViewport(vp, view)
+function GUI.PrepareViewport(vp, view, name)
 	vp.Ambient = Color3.new(1, 1, 1)
 	vp.LightColor = Color3.new(1, 1, 1)
 	vp.LightDirection = Vector3.new(0.5, -1, 0.5)
 	if not view then return end
 	view.Parent = vp
+	local nParts = 0
+	for _, d in ipairs(view:GetDescendants()) do
+		if d:IsA("BasePart") then
+			nParts = nParts + 1
+		end
+	end
+	GUI.Log(("[PREVIEW] %s: view built (%d parts)"):format(tostring(name or "?"), nParts))
 	task.spawn(function()
 		pcall(function()
 			local items = {}
@@ -398,8 +408,10 @@ function GUI.PrepareViewport(vp, view)
 			if #items > 0 then
 				ContentProvider:PreloadAsync(items)
 			end
+			GUI.Log(("[PREVIEW] %s: preloaded %d assets"):format(tostring(name or "?"), #items))
 			view.Parent = nil
 			view.Parent = vp
+			GUI.Log(("[PREVIEW] %s: re-render forced"):format(tostring(name or "?")))
 		end)
 	end)
 end
@@ -480,7 +492,9 @@ function GUI.PreviewList(opts)
 		vp.CurrentCamera = cam
 		local ok, view = pcall(item.build)
 		if ok and view then
-			GUI.PrepareViewport(vp, view)
+			GUI.PrepareViewport(vp, view, item.id)
+		else
+			GUI.Log(("[PREVIEW] %s: view build failed (%s)"):format(tostring(item.id or "?"), tostring(ok and "nil view" or view)))
 		end
 		cam.CFrame = item.camCFrame or CFrame.new(0, 1, 3)
 		local lbl = Instance.new("TextLabel", row)
@@ -510,6 +524,7 @@ function GUI.PreviewList(opts)
 			list.Visible = true
 			if built then return end
 			built = true
+			GUI.Log(("[PREVIEW] list '%s': opening with %d items"):format(tostring(opts.title or "?"), #(opts.items or {})))
 			task.spawn(function()
 				local items = opts.items or {}
 				for idx, item in ipairs(items) do
@@ -520,6 +535,7 @@ function GUI.PreviewList(opts)
 					end
 				end
 				status.Visible = false
+				GUI.Log(("[PREVIEW] list '%s': %d rows built"):format(tostring(opts.title or "?"), #items))
 			end)
 		end,
 		Close = function() list.Visible = false end,

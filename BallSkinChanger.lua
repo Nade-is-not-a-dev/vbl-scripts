@@ -59,6 +59,26 @@ local originals = {}
 local clones = {}
 local seen = {}
 
+-- ---------- logging ----------
+local LOG_PATH = "BallSkinChanger_log.txt"
+local logbuf = {}
+local function now()
+	local ok, s = pcall(os.date, "%H:%M:%S")
+	return ok and s or tostring(os.time())
+end
+local function log(msg)
+	table.insert(logbuf, "[" .. now() .. "] " .. tostring(msg))
+	if #logbuf > 300 then table.remove(logbuf, 1) end
+	pcall(writefile, LOG_PATH, table.concat(logbuf, "\n"))
+end
+log("=== BallSkinChanger started ===")
+if GUI and GUI.Version then
+	log("framework version: " .. tostring(GUI.Version))
+end
+if GUI then
+	GUI.Log = log
+end
+
 -- ---------- GUI (framework) ----------
 local win = GUI.Window({
 	title = "Ball Skin Changer",
@@ -300,6 +320,7 @@ local previewList = GUI.PreviewList({
 listBtn.MouseButton1Click:Connect(function()
 	if #skins == 0 then return end
 	if #previewItems == 0 then
+		log("LIST: building preview items from " .. #skins .. " ball skins")
 		for _, name in ipairs(skins) do
 			table.insert(previewItems, {
 				id = name,
@@ -310,6 +331,7 @@ listBtn.MouseButton1Click:Connect(function()
 				camCFrame = CFrame.lookAt(Vector3.new(0, 1.2, 3.4), Vector3.new(0, 0.6, 0)),
 			})
 		end
+		log("LIST: preview items ready (" .. #previewItems .. ")")
 	end
 	previewList.Open()
 end)

@@ -117,6 +117,12 @@ local function log(msg)
 	pcall(writefile, LOG_PATH, table.concat(logbuf, "\n"))
 end
 log("=== JerseyChanger started === selectedId=" .. tostring(selectedId))
+if GUI and GUI.Version then
+	log("framework version: " .. tostring(GUI.Version))
+end
+if GUI then
+	GUI.Log = log
+end
 
 local RARITY_COLORS = {
 	[-2] = Color3.fromRGB(255, 70, 90),
@@ -192,7 +198,8 @@ local function captureShirt()
 	if char then
 		local s = char:FindFirstChildOfClass("Shirt")
 		if s then
-			appliedShirt = { t = shirtTexture(s), m = s.Mesh }
+			local okm, m = pcall(function() return s.Mesh end)
+			appliedShirt = { t = shirtTexture(s), m = okm and m or nil }
 		end
 	end
 end
@@ -379,6 +386,7 @@ local previewList = GUI.PreviewList({
 listBtn.MouseButton1Click:Connect(function()
 	if #jerseys == 0 then return end
 	if #previewItems == 0 then
+		log("LIST: building preview items from " .. #jerseys .. " jerseys")
 		for _, j in ipairs(jerseys) do
 			local entry = {
 				id = j.id,
@@ -392,6 +400,7 @@ listBtn.MouseButton1Click:Connect(function()
 			}
 			table.insert(previewItems, entry)
 		end
+		log("LIST: preview items ready (" .. #previewItems .. ")")
 	end
 	previewList.Open()
 end)

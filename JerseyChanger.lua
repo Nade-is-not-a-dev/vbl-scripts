@@ -76,7 +76,9 @@ local selectedId = nil
 local pickedTeam = nil
 
 -- pick a color variant ONCE per jersey: the game resolves a TeamName to one
--- fixed texture set, so locking the TeamName keeps the color stable forever
+-- fixed texture set (see Tools.Jersey._get), so locking the TeamName keeps
+-- the color stable forever. Without TeamName the game picks math.random
+-- on EVERY set call -> colors keep spinning.
 local function pickTeamFor(renderId)
 	local assets = ReplicatedStorage:FindFirstChild("Assets")
 	local jf = assets and assets:FindFirstChild("Jersey")
@@ -91,8 +93,16 @@ local function pickTeamFor(renderId)
 		if #variants > 0 then
 			return variants[math.random(#variants)]
 		end
+		log("VARIANT WARN: " .. tostring(renderId) .. " has no team folders, using White Team")
 	end
 	return "White Team"
+end
+
+local function getJerseyById(id)
+	for _, j in ipairs(jerseys) do
+		if j.id == id then return j end
+	end
+	return nil
 end
 
 -- ---------- deep logging ----------
@@ -203,6 +213,27 @@ local function captureShirt()
 	end
 end
 
+-- make sure the TeamName we send actually exists as a folder for this jersey;
+-- Tools.Jersey._get falls back to math.random when TeamName is unknown
+local function ensureValidTeam(id, team)
+	local j = getJerseyById(id)
+	local renderId = j and (j.renderId or j.id) or id
+	local assets = ReplicatedStorage:FindFirstChild("Assets")
+	local jf = assets and assets:FindFirstChild("Jersey")
+	local asset = jf and jf:FindFirstChild(renderId)
+	if asset then
+		if team and asset:FindFirstChild(team) then return team end
+		for _, c in ipairs(asset:GetChildren()) do
+			if c:IsA("Model") and c.Name:find("Team") then
+				log("VARIANT fix: " .. tostring(team) .. " invalid for " .. tostring(id) .. ", using " .. tostring(c.Name))
+				return c.Name
+			end
+		end
+		log("VARIANT WARN: " .. tostring(id) .. " has NO team folders - game will randomize")
+	end
+	return team
+end
+
 local function applyJersey(id)
 	if not stillMine() then return false end
 	if applyBusy then return end
@@ -215,14 +246,19 @@ local function applyJersey(id)
 		if not JerseyTool or not JerseyTool.set then
 			error("Tools.Jersey not loaded")
 		end
-		local setArgs = { Character = char, Id = id, Player = lp }
+		local team = pickedTeam
+		if team then
+			team = ensureValidTeam(id, team)
+			pickedTeam = team
+		end
+		if not team then
+			error("no valid TeamName - cannot lock color")
+		end
+		local setArgs = { Character = char, Id = id, Player = lp, TeamName = team }
 		local sName, sNumber = getStyleInfo()
 		if sName and sNumber then
 			setArgs.Name = sName
 			setArgs.Number = sNumber
-		end
-		if pickedTeam then
-			setArgs.TeamName = pickedTeam
 		end
 		JerseyTool.set(setArgs)
 	end)
@@ -318,13 +354,6 @@ hint.TextXAlignment = Enum.TextXAlignment.Left
 hint.Parent = frame
 
 -- ---------- buttons ----------
-local function getJerseyById(id)
-	for _, j in ipairs(jerseys) do
-		if j.id == id then return j end
-	end
-	return nil
-end
-
 local function pickVariantFor(id)
 	local j = getJerseyById(id)
 	local team = pickTeamFor(j and (j.renderId or j.id) or id)

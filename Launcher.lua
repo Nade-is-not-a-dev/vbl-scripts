@@ -72,7 +72,7 @@ local function getScripts()
 		if type(item) == "table" and item.type == "file" and item.name:sub(-4) == ".lua"
 		and item.name ~= "Launcher.lua"
 		and item.name ~= "gui_framework.lua"
-		and item.name ~= "vbl_framework.lua" then
+		and item.name ~= "framework_v3.lua" then
 			table.insert(list, item.name)
 		end
 	end
@@ -129,7 +129,7 @@ local function runScript(name)
 end
 
 -- ---------- GUI framework (fetched from repo) ----------
-local _fw = fetch(RAW_URL .. "vbl_framework.lua?cb=" .. tostring(os.time()))
+local _fw = fetch(RAW_URL .. "framework_v3.lua?cb=" .. tostring(os.time()))
 if _fw then
 	log("framework fetched: " .. tostring(#_fw) .. " chars")
 else

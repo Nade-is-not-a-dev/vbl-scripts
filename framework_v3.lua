@@ -327,6 +327,24 @@ function GUI.BuildJerseyView(assetName, teamName)
 	upper.CanCollide = false
 	upper.CFrame = CFrame.new(0, 1, 0)
 	hrp.CFrame = CFrame.new(0, 0.2, 0)
+	local meshInfo = "no-mesh"
+	if upper:IsA("MeshPart") then
+		meshInfo = "MeshPart mesh=" .. tostring(upper.MeshId) .. " tex=" .. tostring(upper.TextureID)
+	else
+		local m = upper:FindFirstChildOfClass("SpecialMesh")
+		if m then
+			meshInfo = "SpecialMesh mesh=" .. tostring(m.MeshId) .. " tex=" .. tostring(m.TextureId)
+		end
+	end
+	GUI.Log(("[PREVIEW] %s: torso %s (%s)"):format(tostring(assetName), upper:IsA("MeshPart") and "char-clone" or "fallback", meshInfo))
+	local probe = Instance.new("Part", root)
+	probe.Name = "RenderProbe"
+	probe.Size = Vector3.new(0.25, 0.25, 0.25)
+	probe.Anchored = true
+	probe.CanCollide = false
+	probe.Material = Enum.Material.SmoothPlastic
+	probe.Color = Color3.new(1, 0, 0)
+	probe.CFrame = CFrame.new(0, 0.4, 0)
 	for _, p in ipairs(parts) do
 		if p:IsA("SurfaceGui") then
 			pcall(function()
@@ -358,6 +376,15 @@ function GUI.BuildBallView(id)
 		root:Destroy()
 		return nil
 	end
+	local nParts = 0
+	local firstMesh = "none"
+	for _, c in ipairs(root:GetDescendants()) do
+		if c:IsA("MeshPart") then
+			nParts = nParts + 1
+			if firstMesh == "none" then firstMesh = tostring(c.MeshId) end
+		end
+	end
+	GUI.Log(("[PREVIEW] ball %s: model=%s parts=%d firstMesh=%s"):format(tostring(id), model.ClassName, nParts, firstMesh))
 	pcall(function()
 		local size = root:GetExtentsSize()
 		if size.X ~= size.X or size.Y ~= size.Y or size.Z ~= size.Z then return end

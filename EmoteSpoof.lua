@@ -1,47 +1,14 @@
-pcall(writefile, "EmoteSpoof_probe.txt", "L0 parse ok\n")
--- Emote Spoofer v13 (client-side, Volleyball Legends)
--- paths: hook LoadAnimation + patch Animation instances + flush LoadedAnimations cache
--- + force-play fallback: if wheel slot click doesn't trigger the game's own
--- PlayAnimation within 0.3s, play it via the game controller ourselves.
+-- Emote Spoofer (client-side, Volleyball Legends)
+-- Any emote YOU trigger (wheel, quick chat, chat command) gets replaced by
+-- the chosen emote. The game plays every emote through
+--   AnimationController:PlayAnimation(id) -> Animator:LoadAnimation(anim)
+-- so a single LoadAnimation hook + one AnimationPlayed backup covers all paths.
 
-local LOG_PATH = "EmoteSpoof_log.txt"
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
-
--- ---------- config ----------
-local CONFIG_PATH = "VBLConfig.json"
-local config = {}
-pcall(function()
-	if isfile and isfile(CONFIG_PATH) then
-		local data = readfile(CONFIG_PATH)
-		if type(data) == "string" and data ~= "" then
-			config = HttpService:JSONDecode(data)
-		end
-	end
-end)
-local function saveConfig()
-	if type(config) ~= "table" then config = {} end
-	pcall(writefile, CONFIG_PATH, HttpService:JSONEncode(config))
-end
-
-local logbuf = {}
-local function log(msg)
-	table.insert(logbuf, tostring(msg))
-	if #logbuf > 200 then
-		local cut = #logbuf - 200
-		for _ = 1, cut do table.remove(logbuf, 1) end
-	end
-	local ok = pcall(writefile, LOG_PATH, table.concat(logbuf, "\n"))
-	if not ok then
-		pcall(writefile, LOG_PATH, "ERROR: failed writing log\n" .. tostring(msg))
-	end
-end
-
-local function logerr(err, tb)
-	log("!! ERROR: " .. tostring(err))
-	if tb then log("!! TRACEBACK:\n" .. tostring(tb)) end
-end
-
-local setStatus
+local lp = Players.LocalPlayer
+local pg = lp:WaitForChild("PlayerGui")
 
 -- ---------- GUI framework (fetched from repo) ----------
 local function httpGet(url)
@@ -66,633 +33,323 @@ local _fw = httpGet("https://raw.githubusercontent.com/Nade-is-not-a-dev/vbl-scr
 local GUI = _fw and loadstring(_fw)()
 assert(GUI, "Failed to load GUI framework - check connection")
 
-local function main()
-	pcall(writefile, "EmoteSpoof_probe.txt", "L1 main started\n")
-	local Players = game:GetService("Players")
-	local ReplicatedStorage = game:GetService("ReplicatedStorage")
-	local UserInputService = game:GetService("UserInputService")
-	local Workspace = game:GetService("Workspace")
-	local StarterPlayer = game:GetService("StarterPlayer")
-	local GuiService = game:GetService("GuiService")
-
-	local lp
-	for _ = 1, 300 do
-		lp = Players.LocalPlayer
-		if lp then break end
-		task.wait(0.1)
-	end
-	if not lp then
-		error("LocalPlayer never spawned (300 waits)")
-	end
-	local pg = lp:WaitForChild("PlayerGui", 20)
-	if not pg then error("PlayerGui not found") end
-
-	local ItemModule = nil
-	pcall(function()
-		ItemModule = require(ReplicatedStorage.Content.Item)
-	end)
-	local ENTITIES = ReplicatedStorage.Content.Item:FindFirstChild("Entities")
-	log("startup: ItemModule loaded: " .. tostring(ItemModule ~= nil) .. ", Entities found: " .. tostring(ENTITIES ~= nil))
-
-	local emotes = {}
-	local emoteAssets = {}
-	local targetAsset = nil
-	local targetName = "OFF"
-	local spoofed = {}
-	local attached = {}
-	local spoofCount = 0
-	local dbgCount = 0
-	local apFire = 0
-	local hookFire = 0
-
-	local function dbgAnim(inst, source)
-		if dbgCount >= 20 then return end
-		dbgCount = dbgCount + 1
-		log("DBG " .. source .. ": Animation '" .. tostring(inst.AnimationId)
-			.. "' parent=" .. tostring(inst.Parent and inst.Parent:GetFullName()))
-	end
-
-	local function installDebug()
-		local function watch(parent, src)
-			parent.DescendantAdded:Connect(function(inst)
-				if inst:IsA("Animation") then
-					dbgAnim(inst, src)
-				end
-			end)
+-- ---------- config ----------
+local CONFIG_PATH = "VBLConfig.json"
+local config = {}
+pcall(function()
+	if isfile and isfile(CONFIG_PATH) then
+		local data = readfile(CONFIG_PATH)
+		if type(data) == "string" and data ~= "" then
+			config = HttpService:JSONDecode(data)
 		end
-		if lp.Character then
-			watch(lp.Character, "char")
-		end
-		lp.CharacterAdded:Connect(function(char)
-			watch(char, "char")
-		end)
-		watch(Workspace, "ws")
-		watch(ReplicatedStorage, "rs")
-		watch(StarterPlayer, "sp")
-		task.delay(3, function()
-			local function scan(parent, name)
-				local n = 0
-				local samples = {}
-				for _, inst in ipairs(parent:GetDescendants()) do
-					if inst:IsA("Animation") then
-						n = n + 1
-						if #samples < 3 then
-							table.insert(samples, tostring(inst.AnimationId))
-						end
-					end
-				end
-				if n > 0 then
-					log("SCAN " .. name .. ": " .. n .. " animations (" .. table.concat(samples, ",") .. ")")
-				else
-					log("SCAN " .. name .. ": 0 animations")
-				end
-			end
-			scan(lp.Character or Workspace, "char")
-			scan(Workspace, "ws")
-			scan(ReplicatedStorage, "rs")
-			scan(StarterPlayer, "sp")
-		end)
 	end
+end)
+local function saveConfig()
+	if type(config) ~= "table" then config = {} end
+	pcall(writefile, CONFIG_PATH, HttpService:JSONEncode(config))
+end
 
-	-- ---------- collect emotes ----------
-	local function loadEmotes()
-		emotes = {}
-		emoteAssets = {}
-		if not ENTITIES then
-			log("no Entities folder, emotes list empty")
-			return
-		end
-		for _, child in ipairs(ENTITIES:GetChildren()) do
-			if child:IsA("ModuleScript") then
-				local ok, item = pcall(require, child)
-				if ok and type(item) == "table" then
-					local isEmote = false
-					if ItemModule and ItemModule.Type and item.Type == ItemModule.Type.Emote then
-						isEmote = true
-					else
-						isEmote = type(item.Asset) == "string" and item.Asset:find("rbxassetid://") ~= nil
-					end
-					if isEmote and type(item.Asset) == "string" and item.Asset ~= "" then
-						table.insert(emotes, {
-							id = tostring(item.Id or child.Name),
-							name = tostring(item.DisplayName or child.Name),
-							asset = item.Asset,
-						})
-						emoteAssets[item.Asset] = true
-					end
+-- ---------- logging ----------
+local LOG_PATH = "EmoteSpoof_log.txt"
+local logbuf = {}
+local function now()
+	local ok, s = pcall(os.date, "%H:%M:%S")
+	return ok and s or tostring(os.time())
+end
+local function log(msg)
+	table.insert(logbuf, "[" .. now() .. "] " .. tostring(msg))
+	if #logbuf > 300 then table.remove(logbuf, 1) end
+	pcall(writefile, LOG_PATH, table.concat(logbuf, "\n"))
+end
+log("=== EmoteSpoof started ===")
+if GUI and GUI.Version then
+	log("framework version: " .. tostring(GUI.Version))
+end
+if GUI then
+	GUI.Log = log
+end
+
+-- single-instance guard: any newer launch of this script takes over
+local instanceStamp = os.time()
+_G.VBL_ES_STAMP = instanceStamp
+log("instance stamp: " .. tostring(instanceStamp))
+local function stillMine()
+	return _G.VBL_ES_STAMP == instanceStamp
+end
+
+-- ---------- emote collection ----------
+local ENTITIES = ReplicatedStorage.Content.Item:FindFirstChild("Entities")
+local ItemModule = nil
+pcall(function()
+	ItemModule = require(ReplicatedStorage.Content.Item)
+end)
+
+local emotes = {}            -- { id, name, asset }
+local emoteAssets = {}       -- asset -> true (emote detection for the hook)
+
+local function loadEmotes()
+	if not ENTITIES then
+		log("no Content.Item.Entities folder - emotes list empty")
+		return
+	end
+	for _, child in ipairs(ENTITIES:GetChildren()) do
+		if child:IsA("ModuleScript") then
+			local ok, item = pcall(require, child)
+			if ok and type(item) == "table" then
+				local isEmote = false
+				if ItemModule and ItemModule.Type and item.Type == ItemModule.Type.Emote then
+					isEmote = true
+				elseif type(item.Asset) == "string" then
+					isEmote = item.Asset:find("rbxassetid://") ~= nil
+				end
+				if isEmote and type(item.Asset) == "string" and item.Asset ~= "" then
+					table.insert(emotes, {
+						id = tostring(item.Id or child.Name),
+						name = tostring(item.DisplayName or child.Name),
+						asset = item.Asset,
+					})
+					emoteAssets[item.Asset] = true
 				end
 			end
 		end
-		table.sort(emotes, function(a, b) return a.name < b.name end)
-		log("emotes found: " .. #emotes)
 	end
+	table.sort(emotes, function(a, b) return a.name < b.name end)
+	log("emotes found: " .. #emotes)
+end
 
-	-- ---------- spoof engine ----------
-	local function swapAnim(anim, source)
-		if not targetAsset then return end
-		local id = anim.AnimationId
-		if typeof(id) ~= "string" then return end
-		if not emoteAssets[id] then return end
-		if id == targetAsset then return end
-		anim.AnimationId = targetAsset
-		spoofCount = spoofCount + 1
-		if spoofCount <= 30 then
-			log("SWAP " .. spoofCount .. " [" .. source .. "]: " .. id .. " -> " .. targetAsset)
-		end
+-- ---------- spoof engine ----------
+local target = nil -- { id, name, asset }
+local swapCount = 0
+
+local function swapAnim(anim, source)
+	if not target then return end
+	local id = anim.AnimationId
+	if typeof(id) ~= "string" then return end
+	if not emoteAssets[id] then return end -- only emotes, never walk/idle
+	if id == target.asset then return end
+	anim.AnimationId = target.asset
+	swapCount = swapCount + 1
+	if swapCount <= 20 then
+		log("SWAP [" .. source .. "]: " .. id .. " -> " .. target.asset)
 	end
+end
 
-	-- path 1: metatable hook on Animator:LoadAnimation (catches local + replicated + rigs)
-	local hookOk = false
-	local function installHook()
-		local mt = getrawmetatable(game)
-		if not mt then
-			log("HOOK: getrawmetatable nil")
-			return
-		end
-		local oldNamecall = mt.__namecall
-		if not oldNamecall then
-			log("HOOK: __namecall nil")
-			return
-		end
-		local getMethod = getnamecallmethod or namecallmethod
-		if not getMethod then
-			log("HOOK: no getnamecallmethod")
-			getMethod = function() return nil end
-		end
+-- path 1 (main): patch the Animation instance before Animator loads it
+local function installHook()
+	local mt = getrawmetatable(game)
+	if not mt then
+		log("HOOK FAILED: getrawmetatable returned nil (backup path still active)")
+		return false
+	end
+	local oldNamecall = mt.__namecall
+	if not oldNamecall then
+		log("HOOK FAILED: __namecall missing (backup path still active)")
+		return false
+	end
+	local getMethod = getnamecallmethod or namecallmethod
+	local ok, err = pcall(function()
 		setreadonly(mt, false)
 		mt.__namecall = newcclosure(function(self, ...)
-			local anim = ...
-			local ok, err = pcall(function()
+			local args = { ... }
+			local ok2, err2 = pcall(function()
 				if getMethod() == "LoadAnimation"
 				and typeof(self) == "Instance"
 				and self:IsA("Animator") then
-					hookFire = hookFire + 1
-					if hookFire <= 10 then
-						log("HOOK FIRE " .. hookFire .. ": id=" .. tostring(anim and typeof(anim) == "Instance" and anim.AnimationId))
-					end
+					local anim = args[1]
 					if typeof(anim) == "Instance" and anim:IsA("Animation") then
-						swapAnim(anim, "hook")
+						swapAnim(anim, "load")
 					end
 				end
 			end)
-			if not ok then
-				logerr(err, debug.traceback())
+			if not ok2 then
+				log("HOOK error: " .. tostring(err2))
 			end
 			return oldNamecall(self, ...)
 		end)
 		setreadonly(mt, true)
-		hookOk = true
-		log("HOOK installed OK")
+	end)
+	if not ok then
+		log("HOOK FAILED: " .. tostring(err))
+		return false
 	end
+	log("HOOK installed: Animator:LoadAnimation patched")
+	return true
+end
 
-	-- path 2: AnimationPlayed backup (replicated plays / anything the hook misses)
-	local function attachAnimator(animator)
-		if attached[animator] then return end
-		attached[animator] = true
-		animator.AnimationPlayed:Connect(function(track, anim)
-			apFire = apFire + 1
-			if apFire <= 15 then
-				local animatorParent = animator.Parent
-				log("AP FIRE " .. apFire .. ": id=" .. tostring(anim and anim.AnimationId)
-					.. " animatorParent=" .. tostring(animatorParent and animatorParent.Name)
-					.. " targetSet=" .. tostring(targetAsset ~= nil))
-			end
-			if not targetAsset then return end
-			local id = anim.AnimationId
-			if typeof(id) == "string" and emoteAssets[id] and id ~= targetAsset then
-				track:Stop()
-				local ok, err = pcall(function()
-					local newAnim = Instance.new("Animation")
-					newAnim.AnimationId = targetAsset
-					newAnim.Parent = anim.Parent or animator:FindFirstAncestorOfClass("Humanoid")
-					if not newAnim.Parent then
-						newAnim:Destroy()
-						return
-					end
-					local newTrack = animator:LoadAnimation(newAnim)
-					newTrack.Looped = track.Looped
-					newTrack.Priority = track.Priority
-					newTrack:Play(track.TimePosition)
-					spoofed[track] = newTrack
-					track.Stopped:Connect(function()
-						local t = spoofed[track]
-						if t and t.IsPlaying then
-							t:Stop()
-						end
-						spoofed[track] = nil
-					end)
-				end)
-				if not ok then
-					logerr(err, debug.traceback())
-				else
-					spoofCount = spoofCount + 1
-					if spoofCount <= 5 then
-						log("SWAP " .. spoofCount .. " [AP]: " .. id .. " -> " .. targetAsset)
-					end
+-- path 2 (backup): stop + replay anything that already played unpatched
+local attached = {}
+local function attachAnimator(animator)
+	if attached[animator] then return end
+	attached[animator] = true
+	animator.AnimationPlayed:Connect(function(track, anim)
+		if not stillMine() then return end
+		if not target then return end
+		if typeof(anim) ~= "Instance" or not anim:IsA("Animation") then return end
+		local id = anim.AnimationId
+		if typeof(id) ~= "string" or not emoteAssets[id] then return end
+		if id == target.asset then return end
+		log("AP backup: " .. id .. " -> " .. target.asset)
+		track:Stop()
+		task.spawn(function()
+			pcall(function()
+				local na = Instance.new("Animation")
+				na.AnimationId = target.asset
+				na.Parent = anim.Parent or animator:FindFirstAncestorOfClass("Humanoid")
+				if not na.Parent then
+					na:Destroy()
+					return
 				end
-			end
-		end)
-	end
-
-	local function attachCharacter(char)
-		if not char then return end
-		local humanoid = char:FindFirstChildOfClass("Humanoid")
-		if not humanoid then return end
-			task.spawn(function()
-				for _ = 1, 50 do
-					task.wait(0.2)
-					local animator = humanoid:FindFirstChildOfClass("Animator")
-					if animator then
-						attachAnimator(animator)
-						log("animator attached: " .. char.Name)
-						break
-					end
-				end
+				local nt = animator:LoadAnimation(na)
+				nt.Looped = track.Looped
+				nt.Priority = track.Priority
+				nt:Play()
 			end)
-	end
-
-	-- path 3: patch replicated Animation instances before the engine plays them
-	local function watchPatch()
-		local char = lp.Character
-		if char then
-			local hum = char:FindFirstChildOfClass("Humanoid")
-			if hum then
-				hum.DescendantAdded:Connect(function(inst)
-					if targetAsset and inst:IsA("Animation") then
-						swapAnim(inst, "patch")
-					end
-				end)
-				task.spawn(function()
-					local sweepCount = 0
-					while true do
-						task.wait(0.3)
-						if targetAsset then
-							sweepCount = sweepCount + 1
-							local total = 0
-							for _, inst in ipairs(hum:GetDescendants()) do
-								if inst:IsA("Animation") then
-									total = total + 1
-									swapAnim(inst, "sweep")
-								end
-							end
-							if sweepCount == 1 then
-								log("SWEEP first run: " .. total .. " animations in humanoid")
-							end
-						end
-					end
-				end)
-			end
-		end
-		Workspace.DescendantAdded:Connect(function(inst)
-			if targetAsset and inst:IsA("Animation") then
-				swapAnim(inst, "wsPatch")
-			end
 		end)
-		log("watch installed (patch replicated animations)")
-	end
+	end)
+end
 
-	lp.CharacterAdded:Connect(attachCharacter)
-	lp.CharacterAdded:Connect(watchPatch)
-	pcall(attachCharacter, lp.Character)
-	pcall(watchPatch)
-	installDebug()
-
-	-- ---------- GUI (framework) ----------
-	local win = GUI.Window({
-		title = "Emote Spoofer",
-		name = "EmoteSpoof",
-		icon = "ES",
-		size = Vector2.new(280, 200),
-		y = 30,
-	})
-	local frame = win.Content
-	log("GUI created")
-	pcall(writefile, "EmoteSpoof_probe.txt", "L2 gui created\n")
-
-	local status = GUI.Label(frame, "Starting...", UDim2.new(0, 10, 0, 8), UDim2.new(1, -20, 0, 16))
-
-	setStatus = function(text)
-		status.Text = tostring(text)
-	end
-
-	local selBox = GUI.Input(frame, "OFF", UDim2.new(0, 10, 0, 28), UDim2.new(1, -20, 0, 26))
-
-	local prevBtn = GUI.Button(frame, "<", UDim2.new(0, 10, 0, 62), UDim2.new(0, 30, 0, 26))
-	local nextBtn = GUI.Button(frame, ">", UDim2.new(0, 44, 0, 62), UDim2.new(0, 30, 0, 26))
-	local applyBtn = GUI.Button(frame, "APPLY", UDim2.new(0, 78, 0, 62), UDim2.new(0, 80, 0, 26), { color = GUI.Theme.success })
-	local resetBtn = GUI.Button(frame, "RESET", UDim2.new(0, 162, 0, 62), UDim2.new(0, 52, 0, 26), { color = GUI.Theme.danger })
-
-	local hint = Instance.new("TextLabel")
-	hint.Size = UDim2.new(1, -16, 0, 14)
-	hint.Position = UDim2.new(0, 8, 1, -42)
-	hint.BackgroundTransparency = 1
-	hint.Text = "emotes YOU play get replaced with this one"
-	hint.TextColor3 = Color3.fromRGB(150, 150, 160)
-	hint.Font = Enum.Font.Code
-	hint.TextSize = 9
-	hint.TextXAlignment = Enum.TextXAlignment.Left
-	hint.Parent = frame
-
-	local emoteIndex = 1
-
-	local function updateStatus()
-		if targetAsset then
-			setStatus("Spoofing -> " .. targetName)
-		else
-			setStatus("OFF - emotes play normally")
-		end
-	end
-
-	local function flushControllerCache()
-		local ok, knit = pcall(require, ReplicatedStorage.Packages.Knit)
-		if not ok or type(knit) ~= "table" then
-			log("CACHE flush: knit require failed")
-			return
-		end
-		local ok2, ctrl = pcall(function()
-			return knit.GetController("AnimationController")
-		end)
-		if ok2 and ctrl and type(ctrl) == "table" and ctrl.LoadedAnimations then
-			local removed = 0
-			for _, e in ipairs(emotes) do
-				if ctrl.LoadedAnimations[e.id] then
-					ctrl.LoadedAnimations[e.id] = nil
-					removed = removed + 1
-				end
-			end
-			log("CACHE flushed (removed " .. removed .. " emote tracks, walk/idle kept)")
-		else
-			log("CACHE flush: controller not accessible")
-		end
-	end
-
-	local ctrlLog = 0
-	local animCtrl, invSvc, interfaceCtrl = nil, nil, nil
-	local pendingPlay = nil
-
-	local function forcePlayEmote(pe)
-		if not pe then return end
-		local okState, State = pcall(require, ReplicatedStorage.Common.State)
-		local now = workspace:GetServerTimeNow()
-		if okState and State and State.Id and State.Id.Debounce then
-			local cur = State.get(lp, State.Id.Debounce, "EmoteDebounce", 0)
-			if cur and cur > now then
-				log("FORCE PLAY skipped: debounce active until " .. tostring(cur))
+local function attachCharacter(char)
+	if not char then return end
+	local humanoid = char:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+	task.spawn(function()
+		for _ = 1, 50 do
+			task.wait(0.2)
+			if not stillMine() then return end
+			local animator = humanoid:FindFirstChildOfClass("Animator")
+			if animator then
+				attachAnimator(animator)
+				log("animator attached: " .. char.Name)
 				return
 			end
-			State.set(lp, State.Id.Debounce, "EmoteDebounce", now + 1)
 		end
-		pendingPlay = nil
-		if not animCtrl then
-			log("FORCE PLAY failed: AnimationController not accessible")
-			return
-		end
-		log("FORCE PLAY: " .. pe.name .. " (" .. pe.id .. ") via game controller")
-		pcall(function() animCtrl:PlayAnimation(pe.id) end)
-		if invSvc then
-			pcall(function() invSvc:Use(pe.id) end)
-			local okLen, len = pcall(function()
-				return animCtrl:GetAnimationLength(pe.id)
-			end)
-			if okLen and len then
-				task.delay(len, function()
-					pcall(function() invSvc:StopEmotes() end)
-				end)
-			end
-		end
-	end
-
-	local function hookWheelFunctions()
-		local ok, knit = pcall(require, ReplicatedStorage.Packages.Knit)
-		if not ok or type(knit) ~= "table" then
-			log("WHEEL HOOK: knit require failed")
-			return
-		end
-		local ok2, ctrl = pcall(function()
-			return knit.GetController("AnimationController")
-		end)
-		if ok2 and ctrl and type(ctrl) == "table" then
-			animCtrl = ctrl
-			for _, name in ipairs({ "PlayAnimation", "GetAnimationLength", "StopAllEmotes", "ClearAllAnimations" }) do
-				if type(ctrl[name]) == "function" then
-					local old = ctrl[name]
-					local original = hookfunction(old, newcclosure(function(self, ...)
-						local a1 = ...
-						ctrlLog = ctrlLog + 1
-						if ctrlLog <= 20 then
-							log("CTRL " .. name .. "(" .. tostring(a1) .. ")")
-						end
-						if name == "PlayAnimation" and pendingPlay and pendingPlay.id == tostring(a1) then
-							pendingPlay = nil
-						end
-						return original(self, ...)
-					end))
-					log("hooked CTRL " .. name)
-				end
-			end
-		else
-			log("WHEEL HOOK: AnimationController not accessible")
-		end
-		local ok3, inv = pcall(function()
-			return knit.GetService("InventoryService")
-		end)
-		if ok3 and inv and type(inv) == "table" then
-			invSvc = inv
-			for _, name in ipairs({ "Use", "StopEmotes" }) do
-				if type(inv[name]) == "function" then
-					local old = inv[name]
-					local original = hookfunction(old, newcclosure(function(self, ...)
-						local a1 = ...
-						ctrlLog = ctrlLog + 1
-						if ctrlLog <= 20 then
-							log("SVC " .. name .. "(" .. tostring(a1) .. ")")
-						end
-						return original(self, ...)
-					end))
-					log("hooked SVC " .. name)
-				end
-			end
-		else
-			log("WHEEL HOOK: InventoryService not accessible")
-		end
-		local ok4, ic = pcall(function()
-			return knit.GetController("InterfaceController")
-		end)
-		if ok4 and ic and type(ic) == "table" then
-			interfaceCtrl = ic
-			log("WHEEL HOOK: InterfaceController accessible")
-		end
-	end
-
-	-- ---------- buttons ----------
-	prevBtn.MouseButton1Click:Connect(function()
-		if #emotes == 0 then return end
-		emoteIndex = emoteIndex - 1
-		if emoteIndex < 1 then emoteIndex = #emotes end
-		selBox.Text = emotes[emoteIndex].name
 	end)
+end
 
-	nextBtn.MouseButton1Click:Connect(function()
-		if #emotes == 0 then return end
-		emoteIndex = emoteIndex + 1
-		if emoteIndex > #emotes then emoteIndex = 1 end
-		selBox.Text = emotes[emoteIndex].name
-	end)
+lp.CharacterAdded:Connect(attachCharacter)
+pcall(attachCharacter, lp.Character)
+installHook()
 
-	applyBtn.MouseButton1Click:Connect(function()
-		local name = selBox.Text
-		for _, e in ipairs(emotes) do
-			if e.name == name or e.id == name then
-			targetAsset = e.asset
-			targetName = e.name
-			log("APPLY: " .. targetName .. " (" .. targetAsset .. ")")
-			flushControllerCache()
+-- ---------- GUI (framework) ----------
+local win = GUI.Window({
+	title = "Emote Spoofer",
+	name = "EmoteSpoof",
+	icon = "ES",
+	size = Vector2.new(280, 200),
+	y = 30,
+})
+local frame = win.Content
+
+local status = GUI.Label(frame, "Starting...", UDim2.new(0, 10, 0, 8), UDim2.new(1, -20, 0, 16))
+local selBox = GUI.Input(frame, "OFF", UDim2.new(0, 10, 0, 28), UDim2.new(1, -20, 0, 26))
+local prevBtn = GUI.Button(frame, "<", UDim2.new(0, 10, 0, 58), UDim2.new(0, 30, 0, 26))
+local nextBtn = GUI.Button(frame, ">", UDim2.new(0, 44, 0, 58), UDim2.new(0, 30, 0, 26))
+local listBtn = GUI.Button(frame, "LIST", UDim2.new(0, 78, 0, 58), UDim2.new(0, 42, 0, 26))
+local applyBtn = GUI.Button(frame, "APPLY", UDim2.new(0, 124, 0, 58), UDim2.new(0, 80, 0, 26), { color = GUI.Theme.success })
+local resetBtn = GUI.Button(frame, "RESET", UDim2.new(0, 208, 0, 58), UDim2.new(0, 52, 0, 26), { color = GUI.Theme.danger })
+
+local hint = Instance.new("TextLabel")
+hint.Size = UDim2.new(1, -16, 0, 14)
+hint.Position = UDim2.new(0, 8, 1, -42)
+hint.BackgroundTransparency = 1
+hint.Text = "emotes YOU play get replaced with this one"
+hint.TextColor3 = Color3.fromRGB(150, 150, 160)
+hint.Font = Enum.Font.Code
+hint.TextSize = 9
+hint.TextXAlignment = Enum.TextXAlignment.Left
+hint.Parent = frame
+
+local emoteIndex = 1
+
+local function updateStatus()
+	if target then
+		status.Text = "Spoofing -> " .. target.name
+	else
+		status.Text = "OFF - emotes play normally"
+	end
+end
+
+local function applyEmote(name)
+	for _, e in ipairs(emotes) do
+		if e.name == name or e.id == name then
+			target = { id = e.id, name = e.name, asset = e.asset }
+			log("APPLY: " .. e.name .. " (" .. e.asset .. ")")
 			updateStatus()
 			config.EmoteSpoof = { selected = e.name }
 			saveConfig()
-			GUI.Notify("Spoofing emote: " .. targetName, "success")
-			return
+			GUI.Notify("Spoofing emote: " .. e.name, "success")
+			return true
 		end
 	end
-	targetAsset = nil
-	targetName = "OFF"
-	updateStatus()
 	GUI.Notify("Emote not found: " .. name, "error")
+	return false
+end
+
+-- ---------- buttons ----------
+prevBtn.MouseButton1Click:Connect(function()
+	if #emotes == 0 then return end
+	emoteIndex = emoteIndex - 1
+	if emoteIndex < 1 then emoteIndex = #emotes end
+	selBox.Text = emotes[emoteIndex].name
+end)
+
+nextBtn.MouseButton1Click:Connect(function()
+	if #emotes == 0 then return end
+	emoteIndex = emoteIndex + 1
+	if emoteIndex > #emotes then emoteIndex = 1 end
+	selBox.Text = emotes[emoteIndex].name
+end)
+
+applyBtn.MouseButton1Click:Connect(function()
+	applyEmote(selBox.Text)
 end)
 
 resetBtn.MouseButton1Click:Connect(function()
-	targetAsset = nil
-	targetName = "OFF"
+	target = nil
 	selBox.Text = "OFF"
 	updateStatus()
-	flushControllerCache()
-	log("RESET")
+	log("RESET: spoof disabled")
 	GUI.Notify("Emote spoof disabled", "info")
 end)
 
-	-- keep-alive: re-parent if the game clears PlayerGui
-	local guiDestroyed = false
-	win.Gui.Destroying:Connect(function()
-		guiDestroyed = true
-	end)
-	task.spawn(function()
-		while not guiDestroyed do
-			task.wait(0.5)
-			if not guiDestroyed and win.Gui.Parent == nil then
-				win.Gui.Parent = pg
-				log("GUI re-parented to PlayerGui")
-			end
-		end
-	end)
-
-	log("spoof engine attached (AnimationPlayed path ready)")
-	installHook()
-
-	loadEmotes()
-	if #emotes == 0 then
-		setStatus("No emotes found")
-	else
-		setStatus("Emotes: " .. #emotes)
-		selBox.Text = emotes[emoteIndex].name
-	end
-	local saved = config.EmoteSpoof and config.EmoteSpoof.selected
-	if saved and type(saved) == "string" then
+local previewItems = {}
+local previewList = GUI.PreviewList({
+	parent = win.Root,
+	position = UDim2.fromOffset(20, win.Root.AbsoluteSize.Y + 4),
+	width = 240,
+	height = 320,
+	title = "Emotes",
+	items = previewItems,
+	onPick = function(id)
+		log("LIST pick: " .. tostring(id))
+		selBox.Text = id
+		applyEmote(id)
+	end,
+})
+listBtn.MouseButton1Click:Connect(function()
+	if #emotes == 0 then return end
+	if #previewItems == 0 then
+		log("LIST: building items from " .. #emotes .. " emotes")
 		for _, e in ipairs(emotes) do
-			if e.name == saved then
-				selBox.Text = saved
-				break
-			end
+			table.insert(previewItems, { id = e.name, name = e.name })
 		end
+		log("LIST: items ready (" .. #previewItems .. ")")
 	end
-	local function hookWheelButtons()
-		local function tryHook(btn, name)
-			if btn:FindFirstChild("EmoteSpoofHooked") then return end
-			local tag = Instance.new("StringValue")
-			tag.Name = "EmoteSpoofHooked"
-			tag.Parent = btn
-			local ev = btn.Activated
-			if not ev then return end
-			ev:Connect(function()
-				local lp2 = Players.LocalPlayer
-				local char = lp2 and lp2.Character
-				local hum = char and char:FindFirstChildOfClass("Humanoid")
-				local md = hum and hum.MoveDirection
-				log("WHEELBTN pressed: " .. name
-					.. " moving=" .. tostring(md and md.Magnitude > 0)
-					.. " health=" .. tostring(hum and hum.Health)
-					.. " parent=" .. tostring(btn.Parent and btn.Parent.Name))
-				local slotName = ""
-				local dn = btn:FindFirstChild("DisplayName")
-				if dn and dn:IsA("TextLabel") then slotName = dn.Text end
-				local slotEmote = nil
-				for _, e in ipairs(emotes) do
-					if e.name == slotName then
-						slotEmote = e
-						break
-					end
-				end
-				if not slotEmote then
-					log("WHEELBTN slot unknown: displayName='" .. tostring(slotName) .. "'")
-					return
-				end
-				local selVal = "?"
-				if interfaceCtrl then
-					pcall(function()
-						local s = interfaceCtrl.SelectedEquippable
-						if s and s.get then selVal = tostring(s:get()) end
-					end)
-				end
-				log("WHEELBTN slot: " .. slotEmote.name .. " id=" .. slotEmote.id
-					.. " selected=" .. selVal)
-				local token = os.clock()
-				pendingPlay = { id = slotEmote.id, name = slotEmote.name, token = token }
-				task.delay(0.3, function()
-					if pendingPlay and pendingPlay.token == token then
-						forcePlayEmote(pendingPlay)
-					end
-				end)
-			end)
-		end
-		pg.DescendantAdded:Connect(function(inst)
-			if inst:IsA("GuiButton") and (inst.Name == "EmoteOpenerBtn" or tostring(inst.Name):match("^WheelButton_")) then
-				tryHook(inst, inst.Name)
-			end
-		end)
-		for _, inst in ipairs(pg:GetDescendants()) do
-			if inst:IsA("GuiButton") and (inst.Name == "EmoteOpenerBtn" or tostring(inst.Name):match("^WheelButton_")) then
-				tryHook(inst, inst.Name)
-			end
-		end
-		log("wheel UI watcher installed")
-	end
-
-	updateStatus()
-	log("READY")
-	hookWheelFunctions()
-	hookWheelButtons()
-
-	-- diagnostics probe: is the GUI actually rendered and where?
-	task.delay(2, function()
-		local okf, fx, fy, fw, fh = pcall(function()
-			local a = frame.AbsolutePosition
-			local b = frame.AbsoluteSize
-			return a.X, a.Y, b.X, b.Y
-		end)
-		local okr, res = pcall(function()
-			return GuiService:GetScreenResolution()
-		end)
-		log("PROBE: parent=" .. tostring(win.Gui.Parent and win.Gui.Parent.Name)
-			.. " enabled=" .. tostring(win.Gui.Enabled)
-			.. " framePos=" .. tostring(fx) .. "," .. tostring(fy)
-			.. " frameSize=" .. tostring(fw) .. "x" .. tostring(fh)
-			.. " screen=" .. tostring(res)
-			.. " desc=" .. tostring(win.Gui:IsDescendantOf(game)))
-	end)
-end
-
-local ok, err = xpcall(main, function(e)
-	logerr(e, debug.traceback("", 2))
+	previewList.Open()
 end)
-if not ok then
-	log("FATAL: main() failed to complete")
+
+-- ---------- init ----------
+loadEmotes()
+if #emotes == 0 then
+	status.Text = "No emotes found"
+else
+	status.Text = "Emotes: " .. #emotes
+	selBox.Text = emotes[emoteIndex].name
 end
+local saved = config.EmoteSpoof and config.EmoteSpoof.selected
+if saved and type(saved) == "string" then
+	selBox.Text = saved
+	log("INIT: saved selection restored: " .. saved)
+end
+updateStatus()
+log("READY - " .. #emotes .. " emotes, spoofing " .. tostring(target and target.name or "OFF"))

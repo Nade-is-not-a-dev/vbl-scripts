@@ -465,24 +465,28 @@ function GUI.PreviewList(opts)
 		end)
 	end
 
-	list.Open = function()
-		list.Visible = true
-		if built then return end
-		built = true
-		task.spawn(function()
-			local items = opts.items or {}
-			for idx, item in ipairs(items) do
-				addRow(item, idx)
-				if idx % 6 == 0 then
-					status.Text = ("Memuat %d/%d..."):format(idx, #items)
-					task.wait()
+	local api = {
+		Frame = list,
+		Open = function()
+			list.Visible = true
+			if built then return end
+			built = true
+			task.spawn(function()
+				local items = opts.items or {}
+				for idx, item in ipairs(items) do
+					addRow(item, idx)
+					if idx % 6 == 0 then
+						status.Text = ("Memuat %d/%d..."):format(idx, #items)
+						task.wait()
+					end
 				end
-			end
-			status.Visible = false
-		end)
-	end
-	closeBtn.MouseButton1Click:Connect(function() list.Visible = false end)
-	return list
+				status.Visible = false
+			end)
+		end,
+		Close = function() list.Visible = false end,
+	}
+	closeBtn.MouseButton1Click:Connect(api.Close)
+	return api
 end
 
 -- ---------- notifications (Roblox built-in) ----------

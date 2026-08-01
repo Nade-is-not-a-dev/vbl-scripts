@@ -61,7 +61,7 @@ local function log(msg)
 	if #logbuf > 300 then table.remove(logbuf, 1) end
 	pcall(writefile, LOG_PATH, table.concat(logbuf, "\n"))
 end
-log("=== EmoteSpoof started ===")
+log("=== EmoteSpoof v2 started ===")
 if GUI and GUI.Version then
 	log("framework version: " .. tostring(GUI.Version))
 end

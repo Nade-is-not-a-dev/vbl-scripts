@@ -160,7 +160,16 @@ local function installPlayHook()
 			if stillMine() and target and type(name) == "string"
 			and emoteIds[name] and name ~= target.id then
 				log("PLAY: " .. name .. " -> " .. target.id)
-				return orig(self, target.id, ...)
+				local res = orig(self, target.id, ...)
+				-- the caller (EmoteWheel) reads GetAnimationLength(name) to
+				-- schedule StopEmotes; mirror the loaded track under the
+				-- original name so it finds a length and doesn't stop us at 0s
+				local lc = ctrl.LoadedAnimations
+				if type(lc) == "table" and lc[target.id] and not lc[name] then
+					lc[name] = lc[target.id]
+					log("MIRROR: LoadedAnimations[" .. tostring(name) .. "] -> " .. tostring(target.id))
+				end
+				return res
 			end
 			return orig(self, name, ...)
 		end))

@@ -115,7 +115,7 @@ end
 local function runScript(name)
 	log("RUN " .. name .. " ...")
 	killOldGuis()
-	local code = fetch(RAW_URL .. name)
+	local code = fetch(RAW_URL .. name .. "?cb=" .. tostring(os.time()))
 	if not code then
 		logError("RUN " .. name .. " failed: fetch returned nil")
 		return false

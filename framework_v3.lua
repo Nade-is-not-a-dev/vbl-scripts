@@ -9,7 +9,7 @@ local pg = Players.LocalPlayer:WaitForChild("PlayerGui")
 
 local GUI = {}
 
-GUI.Version = "1.0.6"
+GUI.Version = "1.0.7"
 GUI.Log = function() end
 
 local function normalizeAssetURL(s)
@@ -282,10 +282,11 @@ function GUI.Label(parent, text, pos, size, opts)
 	return l
 end
 
--- ---------- item previews (3D, from game assets) ----------
+-- ---------- item thumbnails (2D, straight from game assets) ----------
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-function GUI.BuildJerseyView(assetName, teamName)
+-- returns { texture = rbxassetid or nil, color = Color3 or nil }
+function GUI.JerseyThumbnail(assetName, teamName)
 	if not assetName then return nil end
 	local assets = ReplicatedStorage:FindFirstChild("Assets")
 	local jf = assets and assets:FindFirstChild("Jersey")
@@ -301,172 +302,71 @@ function GUI.BuildJerseyView(assetName, teamName)
 			end
 		end
 	end
-	local parts = {}
+	local texture, color = nil, nil
+	local function pickTex(id)
+		if not texture and type(id) == "string" and id ~= "" then
+			texture = normalizeAssetURL(id)
+		end
+	end
 	if folder then
 		for _, c in ipairs(folder:GetChildren()) do
-			if c:IsA("Shirt") or c:IsA("Pants") or c:IsA("ShirtGraphic") or c:IsA("SurfaceGui") then
-				table.insert(parts, c:Clone())
+			if c:IsA("Shirt") then
+				pcall(function() pickTex(c.ShirtTemplate) end)
+				pcall(function() pickTex(c.Texture) end)
+			elseif c:IsA("ShirtGraphic") then
+				pcall(function() pickTex(c.Graphic) end)
+			elseif c:IsA("Pants") then
+				pcall(function() pickTex(c.PantsTemplate) end)
+			elseif c:IsA("BasePart") then
+				if not color then color = c.Color end
+				local d = c:FindFirstChildOfClass("Decal")
+				if d then pickTex(d.Texture) end
+			end
+		end
+		if not color then
+			for _, c in ipairs(folder:GetDescendants()) do
+				if c:IsA("BasePart") then
+					color = c.Color
+					break
+				end
 			end
 		end
 	end
-	if #parts == 0 then return nil end
-	local root = Instance.new("WorldModel")
-	local hrp = Instance.new("Part", root)
-	hrp.Name = "HumanoidRootPart"
-	hrp.Size = Vector3.new(2, 2, 1)
-	hrp.Anchored = true
-	hrp.CanCollide = false
-	hrp.Transparency = 1
-	Instance.new("Humanoid", root)
-	local upper
-	local lpc = Players.LocalPlayer
-	if lpc and lpc.Character then
-		upper = lpc.Character:FindFirstChild("UpperTorso")
-		if upper then upper = upper:Clone() end
-	end
-	if not upper then
-		upper = Instance.new("Part")
-		upper.Name = "UpperTorso"
-		upper.Size = Vector3.new(2, 1.2, 1)
-		local mesh = Instance.new("SpecialMesh", upper)
-		mesh.MeshId = "rbxassetid://7430071038"
-	end
-	upper.Parent = root
-	upper.Anchored = true
-	upper.CanCollide = false
-	upper.CFrame = CFrame.new(0, 1, 0)
-	if upper:IsA("MeshPart") then
-		upper.MeshId = normalizeAssetURL(upper.MeshId)
-		upper.TextureID = normalizeAssetURL(upper.TextureID)
-	else
-		local m = upper:FindFirstChildOfClass("SpecialMesh")
-		if m then
-			m.MeshId = normalizeAssetURL(m.MeshId)
-			m.TextureId = normalizeAssetURL(m.TextureId)
-		end
-	end
-	hrp.CFrame = CFrame.new(0, 0.2, 0)
-	local meshInfo = "no-mesh"
-	if upper:IsA("MeshPart") then
-		meshInfo = "MeshPart mesh=" .. tostring(upper.MeshId) .. " tex=" .. tostring(upper.TextureID)
-	else
-		local m = upper:FindFirstChildOfClass("SpecialMesh")
-		if m then
-			meshInfo = "SpecialMesh mesh=" .. tostring(m.MeshId) .. " tex=" .. tostring(m.TextureId)
-		end
-	end
-	GUI.Log(("[PREVIEW] %s: torso %s (%s)"):format(tostring(assetName), upper:IsA("MeshPart") and "char-clone" or "fallback", meshInfo))
-	local probe = Instance.new("Part", root)
-	probe.Name = "RenderProbe"
-	probe.Size = Vector3.new(0.25, 0.25, 0.25)
-	probe.Anchored = true
-	probe.CanCollide = false
-	probe.Material = Enum.Material.SmoothPlastic
-	probe.Color = Color3.new(1, 0, 0)
-	probe.CFrame = CFrame.new(0, 0.1, 0)
-	for _, p in ipairs(parts) do
-		if p:IsA("SurfaceGui") then
-			pcall(function()
-				local pn = p:FindFirstChild("PlayerNumber")
-				if pn then pn.Text = "7" end
-				local sn = p:FindFirstChild("StyleName")
-				if sn then sn.Text = "PREVIEW" end
-			end)
-			p.Adornee = upper
-		end
-		p.Parent = root
-	end
-	return root
+	GUI.Log(("[PREVIEW] %s: thumb=%s color=%s"):format(tostring(assetName), tostring(texture or "none"), tostring(color and ("%.3f,%.3f,%.3f"):format(color.R, color.G, color.B) or "none")))
+	return { texture = texture, color = color }
 end
 
-function GUI.BuildBallView(id)
+-- returns { texture = rbxassetid or nil, color = Color3 or nil }
+function GUI.BallThumbnail(id)
 	if not id then return nil end
 	local assets = ReplicatedStorage:FindFirstChild("Assets")
 	local bf = assets and assets:FindFirstChild("Ball")
 	local model = bf and bf:FindFirstChild(id)
 	if not model or not model:IsA("Model") then return nil end
-	local root = Instance.new("WorldModel")
-	for _, c in ipairs(model:GetChildren()) do
-		if c:IsA("BasePart") and c.Name ~= "BoundingBox" then
-			c:Clone().Parent = root
+	local texture, color = nil, nil
+	local function pickTex(t)
+		if not texture and type(t) == "string" and t ~= "" then
+			texture = normalizeAssetURL(t)
 		end
 	end
-	if not root:FindFirstChildWhichIsA("BasePart") then
-		root:Destroy()
-		return nil
-	end
-	local nParts = 0
-	local firstMesh = "none"
-	for _, c in ipairs(root:GetDescendants()) do
-		if c:IsA("MeshPart") then
-			nParts = nParts + 1
-			if firstMesh == "none" then firstMesh = tostring(c.MeshId) end
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("ImageLabel") then
+			pcall(function() pickTex(d.Image) end)
+		elseif d:IsA("Decal") then
+			pickTex(d.Texture)
+		elseif d:IsA("Texture") then
+			pickTex(d.Texture)
+		elseif d:IsA("MeshPart") then
+			pickTex(d.TextureID)
+		elseif d:IsA("BasePart") then
+			if not color then color = d.Color end
 		end
 	end
-	GUI.Log(("[PREVIEW] ball %s: model=%s parts=%d firstMesh=%s"):format(tostring(id), model.ClassName, nParts, firstMesh))
-	pcall(function()
-		local size = root:GetExtentsSize()
-		if size.X ~= size.X or size.Y ~= size.Y or size.Z ~= size.Z then return end
-		local m = math.max(size.X, size.Y, size.Z, 0.01)
-		local s = 1.6 / m
-		local center = root:GetPivot().Position + size / 2
-		root:PivotTo(CFrame.new(center) * CFrame.new(0, size.Y * s / 2, 0) * CFrame.scale(s, s, s))
-	end)
-	return root
+	GUI.Log(("[PREVIEW] ball %s: thumb=%s color=%s"):format(tostring(id), tostring(texture or "none"), tostring(color and ("%.3f,%.3f,%.3f"):format(color.R, color.G, color.B) or "none")))
+	return { texture = texture, color = color }
 end
 
-local ContentProvider = game:GetService("ContentProvider")
-
-function GUI.PrepareViewport(vp, view, name)
-	vp.Ambient = Color3.new(1, 1, 1)
-	vp.LightColor = Color3.new(1, 1, 1)
-	vp.LightDirection = Vector3.new(0.5, -1, 0.5)
-	if not view then return end
-	view.Parent = vp
-	local nParts = 0
-	for _, d in ipairs(view:GetDescendants()) do
-		if d:IsA("BasePart") then
-			nParts = nParts + 1
-		end
-	end
-	GUI.Log(("[PREVIEW] %s: view built (%d parts)"):format(tostring(name or "?"), nParts))
-	task.spawn(function()
-		pcall(function()
-			local items = {}
-			local function addInst(inst)
-				if inst and not table.find(items, inst) then
-					table.insert(items, inst)
-				end
-			end
-			for _, d in ipairs(view:GetDescendants()) do
-				if d:IsA("MeshPart") then
-					d.MeshId = normalizeAssetURL(d.MeshId)
-					d.TextureID = normalizeAssetURL(d.TextureID)
-					addInst(d)
-				elseif d:IsA("SpecialMesh") then
-					d.MeshId = normalizeAssetURL(d.MeshId)
-					d.TextureId = normalizeAssetURL(d.TextureId)
-					addInst(d)
-				elseif d:IsA("Texture") or d:IsA("Decal") then
-					addInst(d)
-				elseif d:IsA("Shirt") or d:IsA("Pants") then
-					addInst(d)
-				elseif d:IsA("ImageLabel") then
-					addInst(d)
-				end
-			end
-			if #items > 0 then
-				ContentProvider:PreloadAsync(items)
-			end
-			GUI.Log(("[PREVIEW] %s: preloaded %d assets"):format(tostring(name or "?"), #items))
-			view.Parent = nil
-			view.Parent = vp
-			GUI.Log(("[PREVIEW] %s: re-render forced"):format(tostring(name or "?")))
-		end)
-	end)
-end
-
--- ---------- preview list (dropdown with 3D thumbnails) ----------
+-- ---------- preview list (dropdown with 2D thumbnails) ----------
 function GUI.PreviewList(opts)
 	opts = opts or {}
 	local w = opts.width or 240
@@ -531,22 +431,16 @@ function GUI.PreviewList(opts)
 		row.BackgroundColor3 = item.selected and GUI.Theme.accent or Color3.fromRGB(30, 30, 38)
 		row.BorderSizePixel = 0
 		rounded(row, 6)
-		local vp = Instance.new("ViewportFrame", row)
-		vp.Position = UDim2.fromOffset(3, 3)
-		vp.Size = UDim2.fromOffset(40, 40)
-		vp.BackgroundColor3 = Color3.fromRGB(8, 8, 12)
-		vp.BorderSizePixel = 0
-		rounded(vp, 4)
-		local cam = Instance.new("Camera", vp)
-		cam.FieldOfView = 45
-		vp.CurrentCamera = cam
-		local ok, view = pcall(item.build)
-		if ok and view then
-			GUI.PrepareViewport(vp, view, item.id)
-		else
-			GUI.Log(("[PREVIEW] %s: view build failed (%s)"):format(tostring(item.id or "?"), tostring(ok and "nil view" or view)))
+		local img = Instance.new("ImageLabel", row)
+		img.Position = UDim2.fromOffset(3, 3)
+		img.Size = UDim2.fromOffset(40, 40)
+		img.BackgroundColor3 = item.color or Color3.fromRGB(8, 8, 12)
+		img.BorderSizePixel = 0
+		rounded(img, 4)
+		img.ScaleType = Enum.ScaleType.Stretch
+		if item.thumbnail then
+			img.Image = item.thumbnail
 		end
-		cam.CFrame = item.camCFrame or CFrame.new(0, 1, 3)
 		local lbl = Instance.new("TextLabel", row)
 		lbl.Position = UDim2.fromOffset(48, 0)
 		lbl.Size = UDim2.fromOffset(w - 58, 46)

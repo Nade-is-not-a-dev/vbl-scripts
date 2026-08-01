@@ -251,6 +251,8 @@ local function applyJersey(id)
 		local resolvedTeam = resolveTeamName(currentTeam or (teamBox and teamBox.Text or ""))
 		log("APPLY ok id=" .. tostring(id)
 			.. " team=" .. tostring(resolvedTeam or "RANDOM")
+			.. " (current=" .. tostring(currentTeam)
+			.. " box=" .. tostring(teamBox and teamBox.Text or "?") .. ")"
 			.. " shirt=" .. tostring(appliedShirt and appliedShirt.t or "none"))
 	else
 		status.Text = "Apply failed: " .. tostring(err)
@@ -261,6 +263,7 @@ end
 
 local function restoreJersey()
 	selectedId = nil
+	log("RESTORE: real jersey back (selected=nil)")
 	pcall(function()
 		local char = lp.Character
 		if char and JerseyTool and JerseyTool._clear then
@@ -334,9 +337,11 @@ teamCycleBtn.MouseButton1Click:Connect(function()
 	teamIndex = teamIndex % #teams + 1
 	teamBox.Text = teams[teamIndex]
 	currentTeam = teams[teamIndex]
+	log("TEAM SET via COLOR: " .. tostring(currentTeam))
 end)
-teamBox.FocusLost:Connect(function()
+teamBox.FocusLost:Connect(function(enter)
 	currentTeam = teamBox.Text
+	log("TEAM SET via textbox" .. (enter and " (enter)" or "") .. ": " .. tostring(currentTeam))
 end)
 log("GUI: teamBox=" .. tostring(teamBox) .. " currentTeam=" .. tostring(currentTeam))
 local prevBtn = GUI.Button(frame, "<", UDim2.new(0, 10, 0, 92), UDim2.new(0, 30, 0, 26))
@@ -405,6 +410,7 @@ local previewList = GUI.PreviewList({
 	items = previewItems,
 	onPick = function(id)
 		nameBox.Text = id
+		log("LIST pick: " .. tostring(id))
 		applyById(id)
 	end,
 })
@@ -413,15 +419,13 @@ listBtn.MouseButton1Click:Connect(function()
 	if #previewItems == 0 then
 		log("LIST: building preview items from " .. #jerseys .. " jerseys")
 		for _, j in ipairs(jerseys) do
+			local teamName = resolveTeamName(currentTeam or (teamBox and teamBox.Text or "")) or "White Team"
+			local thumb = GUI.JerseyThumbnail(j.renderId or j.id, teamName)
 			local entry = {
 				id = j.id,
 				name = j.name,
 				color = rarityColor(j.rarity),
-				build = function()
-					local teamName = resolveTeamName(currentTeam or (teamBox and teamBox.Text or "")) or "White Team"
-					return GUI.BuildJerseyView(j.renderId or j.id, teamName)
-				end,
-				camCFrame = CFrame.lookAt(Vector3.new(0, 1.8, 2.9), Vector3.new(0, 1, 0)),
+				thumbnail = thumb and thumb.texture or nil,
 			}
 			table.insert(previewItems, entry)
 		end
@@ -458,6 +462,7 @@ if saved and type(saved) == "string" then
 			teamBox.Text = config.JerseyChanger.team
 			currentTeam = config.JerseyChanger.team
 		end
+		log("INIT restore: saved=" .. tostring(saved) .. " team=" .. tostring(config.JerseyChanger.team or "nil"))
 		selectedId = saved
 		applyJersey(saved)
 		status.Text = "Restored saved jersey -> " .. saved

@@ -332,13 +332,12 @@ listBtn.MouseButton1Click:Connect(function()
 	if #previewItems == 0 then
 		log("LIST: building preview items from " .. #skins .. " ball skins")
 		for _, name in ipairs(skins) do
+			local thumb = GUI.BallThumbnail(name)
 			table.insert(previewItems, {
 				id = name,
 				name = name,
-				build = function()
-					return GUI.BuildBallView(name)
-				end,
-				camCFrame = CFrame.lookAt(Vector3.new(0, 1.2, 3.4), Vector3.new(0, 0.6, 0)),
+				thumbnail = thumb and thumb.texture or nil,
+				color = thumb and thumb.color or nil,
 			})
 		end
 		log("LIST: preview items ready (" .. #previewItems .. ")")

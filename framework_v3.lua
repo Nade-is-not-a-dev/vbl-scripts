@@ -357,12 +357,56 @@ function GUI.BuildBallView(id)
 	end
 	pcall(function()
 		local size = root:GetExtentsSize()
+		if size.X ~= size.X or size.Y ~= size.Y or size.Z ~= size.Z then return end
 		local m = math.max(size.X, size.Y, size.Z, 0.01)
 		local s = 1.6 / m
 		local center = root:GetPivot().Position + size / 2
 		root:PivotTo(CFrame.new(center) * CFrame.new(0, size.Y * s / 2, 0) * CFrame.scale(s, s, s))
 	end)
 	return root
+end
+
+local ContentProvider = game:GetService("ContentProvider")
+
+function GUI.PrepareViewport(vp, view)
+	vp.Ambient = Color3.new(1, 1, 1)
+	vp.LightColor = Color3.new(1, 1, 1)
+	vp.LightDirection = Vector3.new(0.5, -1, 0.5)
+	if not view then return end
+	view.Parent = vp
+	task.spawn(function()
+		pcall(function()
+			local ids = {}
+			local function add(s)
+				if type(s) == "string" and s ~= "" and s:find("rbxasset") and not table.find(ids, s) then
+					table.insert(ids, s)
+				end
+			end
+			for _, d in ipairs(view:GetDescendants()) do
+				if d:IsA("MeshPart") then
+					add(d.MeshId)
+				elseif d:IsA("Part") then
+					local m = d:FindFirstChildOfClass("SpecialMesh")
+					if m then
+						add(m.MeshId)
+						add(m.TextureId)
+					end
+					local t = d:FindFirstChildOfClass("Texture")
+					if t then add(t.Texture) end
+					local dec = d:FindFirstChildOfClass("Decal")
+					if dec then add(dec.Texture) end
+				elseif d:IsA("Shirt") or d:IsA("Pants") then
+					pcall(function() add(d.ShirtTemplate) end)
+					pcall(function() add(d.Texture) end)
+				elseif d:IsA("ImageLabel") then
+					add(d.Image)
+				end
+			end
+			if #ids > 0 then
+				ContentProvider:PreloadAsync(ids)
+			end
+		end)
+	end)
 end
 
 -- ---------- preview list (dropdown with 3D thumbnails) ----------
@@ -441,7 +485,7 @@ function GUI.PreviewList(opts)
 		vp.CurrentCamera = cam
 		local ok, view = pcall(item.build)
 		if ok and view then
-			view.Parent = vp
+			GUI.PrepareViewport(vp, view)
 		end
 		cam.CFrame = item.camCFrame or CFrame.new(0, 1, 3)
 		local lbl = Instance.new("TextLabel", row)

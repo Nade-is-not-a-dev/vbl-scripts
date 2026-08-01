@@ -180,7 +180,6 @@ local win = GUI.Window({
 	name = "JerseyChanger",
 	size = Vector2.new(280, 200),
 	y = 90,
-	OnClose = restoreJersey,
 })
 local frame = win.Content
 

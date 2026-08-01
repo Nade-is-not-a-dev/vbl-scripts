@@ -1388,7 +1388,6 @@ function GUI.PreviewList(opts)
 	scroll.BackgroundTransparency = 1
 	scroll.BorderSizePixel = 0
 	scroll.ScrollBarThickness = 4
-	scroll.ScrollBarColor = GUI.Theme.surface
 	scroll.ScrollBarImageColor3 = GUI.Theme.hover
 	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	local layout = Instance.new("UIListLayout", scroll)

@@ -9,7 +9,29 @@ local pg = lp:WaitForChild("PlayerGui")
 
 local REPO = "Nade-is-not-a-dev/vbl-scripts"
 local API_URL = "https://api.github.com/repos/" .. REPO .. "/contents/"
+local COMMIT_URL = "https://api.github.com/repos/" .. REPO .. "/commits/main"
 local RAW_URL = "https://raw.githubusercontent.com/" .. REPO .. "/main/"
+
+-- ---------- deep logging ----------
+local LOG_PATH = "Launcher_log.txt"
+local logbuf = {}
+local function now()
+	local ok, s = pcall(os.date, "%H:%M:%S")
+	return ok and s or tostring(os.time())
+end
+local function log(msg)
+	table.insert(logbuf, "[" .. now() .. "] " .. tostring(msg))
+	if #logbuf > 300 then table.remove(logbuf, 1) end
+	pcall(writefile, LOG_PATH, table.concat(logbuf, "\n"))
+end
+local function logError(msg)
+	log("!! ERROR: " .. tostring(msg))
+	pcall(writefile, LOG_PATH, table.concat(logbuf, "\n"))
+end
+
+log("=== Launcher started ===")
+log("executor: " .. tostring(identifyexecutor and identifyexecutor() or "unknown"))
+log("game: " .. tostring(game.PlaceId) .. " | joined: " .. tostring(os.time()))
 
 local function fetch(url)
 	if request then
@@ -36,9 +58,15 @@ end
 
 local function getScripts()
 	local json = fetch(API_URL)
-	if not json then return nil end
+	if not json then
+		log("list fetch FAILED (no body)")
+		return nil
+	end
 	local ok, data = pcall(HttpService.JSONDecode, HttpService, json)
-	if not ok or type(data) ~= "table" then return nil end
+	if not ok or type(data) ~= "table" then
+		logError("list JSON decode failed: " .. tostring(ok and "bad type" or data))
+		return nil
+	end
 	local list = {}
 	for _, item in ipairs(data) do
 		if type(item) == "table" and item.type == "file" and item.name:sub(-4) == ".lua"
@@ -49,14 +77,42 @@ local function getScripts()
 		end
 	end
 	table.sort(list)
+	log("list fetch OK: " .. #list .. " scripts")
 	return list
 end
 
+local function getLastCommit()
+	local json = fetch(COMMIT_URL)
+	if not json then
+		log("commit fetch FAILED (no body)")
+		return nil
+	end
+	local ok, data = pcall(HttpService.JSONDecode, HttpService, json)
+	if not ok or type(data) ~= "table" then
+		logError("commit JSON decode failed")
+		return nil
+	end
+	local sha = data.sha or (data.commit and data.commit.sha)
+	if sha then
+		local short = tostring(sha):sub(1, 7)
+		log("last commit on main: " .. short)
+		return short
+	end
+	logError("commit response has no sha")
+	return nil
+end
+
 local function runScript(name)
+	log("RUN " .. name .. " ...")
 	local code = fetch(RAW_URL .. name)
-	if not code then return false end
+	if not code then
+		logError("RUN " .. name .. " failed: fetch returned nil")
+		return false
+	end
+	log("RUN " .. name .. ": fetched " .. tostring(#code) .. " chars")
 	local fn, err = loadstring(code)
 	if not fn then
+		logError("RUN " .. name .. " parse error: " .. tostring(err))
 		warn("Launcher: parse error in " .. name .. ": " .. tostring(err))
 		return false
 	end
@@ -64,15 +120,25 @@ local function runScript(name)
 		return debug.traceback(tostring(e), 2)
 	end)
 	if not ok then
+		logError("RUN " .. name .. " runtime error:\n" .. tostring(perr))
 		warn("Launcher: runtime error in " .. name .. "\n" .. tostring(perr))
 		return false
 	end
+	log("RUN " .. name .. " finished OK")
 	return true
 end
 
 -- ---------- GUI framework (fetched from repo) ----------
 local _fw = fetch(RAW_URL .. "vbl_framework.lua?cb=" .. tostring(os.time()))
+if _fw then
+	log("framework fetched: " .. tostring(#_fw) .. " chars")
+else
+	logError("framework fetch FAILED")
+end
 local GUI = _fw and loadstring(_fw)()
+if not GUI then
+	logError("framework loadstring failed")
+end
 assert(GUI, "Failed to load GUI framework - check connection")
 
 -- ---------- GUI (framework) ----------
@@ -87,6 +153,8 @@ local frame = win.Content
 
 local status = GUI.Label(frame, "Loading script list...", UDim2.new(0, 10, 0, 6), UDim2.new(1, -20, 0, 16))
 local refreshBtn = GUI.Button(frame, "REFRESH", UDim2.new(0, 10, 0, 26), UDim2.new(0, 100, 0, 24))
+local commitLabel = GUI.Label(frame, "commit: ?", UDim2.new(0, 10, 1, -16), UDim2.new(1, -20, 0, 14),
+	{ color = GUI.Theme.warn, textSize = 9 })
 
 local listFrame = Instance.new("ScrollingFrame")
 listFrame.Size = UDim2.new(1, -20, 1, -66)
@@ -138,3 +206,11 @@ end
 refreshBtn.MouseButton1Click:Connect(renderList)
 
 renderList()
+
+task.spawn(function()
+	local sha = getLastCommit()
+	if sha and commitLabel then
+		commitLabel.Text = "commit: " .. sha
+		status.Text = status.Text .. " | v" .. sha
+	end
+end)

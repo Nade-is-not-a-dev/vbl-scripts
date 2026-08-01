@@ -73,6 +73,7 @@ end
 local jerseys = {}
 local jerseyIndex = 0
 local selectedId = nil
+local lastTeamName = "White Team"
 
 -- ---------- team color mapping ----------
 local TEAM_COLORS = {
@@ -100,7 +101,14 @@ local function resolveTeamName(text)
 	if not text or text == "" then return nil end
 	local u = text:upper()
 	if u == "RANDOM" then return nil end
-	if u == "AUTO" then return nearestTeamName() end
+	if u == "AUTO" then
+		local mapped = nearestTeamName()
+		if mapped then
+			lastTeamName = mapped
+			return mapped
+		end
+		return lastTeamName
+	end
 	return text
 end
 
@@ -221,7 +229,7 @@ local function applyJersey(id)
 			setArgs.Name = sName
 			setArgs.Number = sNumber
 		end
-		local teamName = resolveTeamName(teamBox and teamBox.Text or "")
+		local teamName = resolveTeamName(currentTeam or (teamBox and teamBox.Text or ""))
 		if teamName then
 			setArgs.TeamName = teamName
 		end
@@ -231,8 +239,9 @@ local function applyJersey(id)
 	if ok then
 		selectedId = id
 		captureShirt()
+		local resolvedTeam = resolveTeamName(currentTeam or (teamBox and teamBox.Text or ""))
 		log("APPLY ok id=" .. tostring(id)
-			.. " team=" .. tostring(teamBox and teamBox.Text or "?")
+			.. " team=" .. tostring(resolvedTeam or "RANDOM")
 			.. " shirt=" .. tostring(appliedShirt and appliedShirt.t or "none"))
 	else
 		status.Text = "Apply failed: " .. tostring(err)
@@ -309,16 +318,21 @@ local teams = { "RANDOM", "AUTO", "White Team", "Red Team", "Purple Team", "Oran
 local teamIndex = 1
 local teamBox = GUI.Input(frame, "RANDOM", UDim2.new(0, 44, 0, 58), UDim2.new(1, -54, 0, 26))
 local teamCycleBtn = GUI.Button(frame, "COLOR", UDim2.new(0, 10, 0, 58), UDim2.new(0, 30, 0, 26))
+local currentTeam = "RANDOM"
+teamCycleBtn.MouseButton1Click:Connect(function()
+	teamIndex = teamIndex % #teams + 1
+	teamBox.Text = teams[teamIndex]
+	currentTeam = teams[teamIndex]
+end)
+teamBox.FocusLost:Connect(function()
+	currentTeam = teamBox.Text
+end)
+log("GUI: teamBox=" .. tostring(teamBox) .. " currentTeam=" .. tostring(currentTeam))
 local prevBtn = GUI.Button(frame, "<", UDim2.new(0, 10, 0, 92), UDim2.new(0, 30, 0, 26))
 local nextBtn = GUI.Button(frame, ">", UDim2.new(0, 44, 0, 92), UDim2.new(0, 30, 0, 26))
 local listBtn = GUI.Button(frame, "LIST", UDim2.new(0, 78, 0, 92), UDim2.new(0, 42, 0, 26))
 local applyBtn = GUI.Button(frame, "APPLY", UDim2.new(0, 124, 0, 92), UDim2.new(0, 80, 0, 26), { color = GUI.Theme.success })
 local resetBtn = GUI.Button(frame, "RESET", UDim2.new(0, 208, 0, 92), UDim2.new(0, 52, 0, 26), { color = GUI.Theme.danger })
-
-teamCycleBtn.MouseButton1Click:Connect(function()
-	teamIndex = teamIndex % #teams + 1
-	teamBox.Text = teams[teamIndex]
-end)
 
 local hint = Instance.new("TextLabel")
 hint.Size = UDim2.new(1, -16, 0, 14)
@@ -351,7 +365,7 @@ end)
 local function applyById(id)
 	if applyJersey(id) then
 		status.Text = "Jersey -> " .. id
-		config.JerseyChanger = { selected = id, team = teamBox.Text }
+		config.JerseyChanger = { selected = id, team = currentTeam or teamBox.Text }
 		saveConfig()
 		GUI.Notify("Jersey applied: " .. id, "success")
 		return true
@@ -393,7 +407,7 @@ listBtn.MouseButton1Click:Connect(function()
 				name = j.name,
 				color = rarityColor(j.rarity),
 				build = function()
-					local teamName = resolveTeamName(teamBox and teamBox.Text or "") or "White Team"
+					local teamName = resolveTeamName(currentTeam or (teamBox and teamBox.Text or "")) or "White Team"
 					return GUI.BuildJerseyView(j.renderId or j.id, teamName)
 				end,
 				camCFrame = CFrame.lookAt(Vector3.new(0, 1.8, 2.9), Vector3.new(0, 1, 0)),
@@ -431,6 +445,7 @@ if saved and type(saved) == "string" then
 		if config.JerseyChanger.team and type(config.JerseyChanger.team) == "string"
 		and config.JerseyChanger.team ~= "" then
 			teamBox.Text = config.JerseyChanger.team
+			currentTeam = config.JerseyChanger.team
 		end
 		selectedId = saved
 		applyJersey(saved)
@@ -453,7 +468,7 @@ if JerseyTool and JerseyTool.set then
 					.. " team=" .. tostring(teamBox and teamBox.Text or "?"))
 			end
 			p9.Id = selectedId
-			local teamName = resolveTeamName(teamBox and teamBox.Text or "")
+			local teamName = resolveTeamName(currentTeam or (teamBox and teamBox.Text or ""))
 			if teamName then
 				p9.TeamName = teamName
 			end

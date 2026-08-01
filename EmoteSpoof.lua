@@ -86,6 +86,7 @@ end)
 
 local emotes = {}            -- { id, name, asset }
 local emoteAssets = {}       -- asset -> true (emote detection for the hook)
+local emoteIds = {}          -- id -> true (emote detection for PlayAnimation hook)
 
 local function loadEmotes()
 	if not ENTITIES then
@@ -109,6 +110,7 @@ local function loadEmotes()
 						asset = item.Asset,
 					})
 					emoteAssets[item.Asset] = true
+					emoteIds[tostring(item.Id or child.Name)] = true
 				end
 			end
 		end
@@ -131,6 +133,56 @@ local function swapAnim(anim, source)
 	swapCount = swapCount + 1
 	if swapCount <= 20 then
 		log("SWAP [" .. source .. "]: " .. id .. " -> " .. target.asset)
+	end
+end
+
+-- path 0 (main): AnimationController:PlayAnimation is called on EVERY emote
+-- trigger (wheel, quick chat, chat command) and is NOT cached, unlike
+-- Animator:LoadAnimation (tracks live in LoadedAnimations after first load).
+local animCtrl = nil
+local function installPlayHook()
+	local ok, knit = pcall(require, ReplicatedStorage.Packages.Knit)
+	if not ok or type(knit) ~= "table" then
+		log("PLAY HOOK FAILED: Knit not accessible")
+		return
+	end
+	local ok2, ctrl = pcall(function()
+		return knit.GetController("AnimationController")
+	end)
+	if not ok2 or type(ctrl) ~= "table" or type(ctrl.PlayAnimation) ~= "function" then
+		log("PLAY HOOK FAILED: AnimationController not accessible")
+		return
+	end
+	animCtrl = ctrl
+	local orig = ctrl.PlayAnimation
+	local ok3, err = pcall(function()
+		ctrl.PlayAnimation = hookfunction(orig, newcclosure(function(self, name, ...)
+			if stillMine() and target and type(name) == "string"
+			and emoteIds[name] and name ~= target.id then
+				log("PLAY: " .. name .. " -> " .. target.id)
+				return orig(self, target.id, ...)
+			end
+			return orig(self, name, ...)
+		end))
+	end)
+	if not ok3 then
+		log("PLAY HOOK FAILED: " .. tostring(err))
+		return
+	end
+	log("PLAY HOOK installed: AnimationController:PlayAnimation patched")
+end
+
+local function flushCache()
+	if not animCtrl or type(animCtrl.LoadedAnimations) ~= "table" then return end
+	local n = 0
+	for _, e in ipairs(emotes) do
+		if animCtrl.LoadedAnimations[e.id] then
+			animCtrl.LoadedAnimations[e.id] = nil
+			n = n + 1
+		end
+	end
+	if n > 0 then
+		log("CACHE: flushed " .. n .. " emote tracks")
 	end
 end
 
@@ -274,6 +326,7 @@ local function applyEmote(name)
 		if e.name == name or e.id == name then
 			target = { id = e.id, name = e.name, asset = e.asset }
 			log("APPLY: " .. e.name .. " (" .. e.asset .. ")")
+			flushCache()
 			updateStatus()
 			config.EmoteSpoof = { selected = e.name }
 			saveConfig()
@@ -308,6 +361,7 @@ resetBtn.MouseButton1Click:Connect(function()
 	target = nil
 	selBox.Text = "OFF"
 	updateStatus()
+	flushCache()
 	log("RESET: spoof disabled")
 	GUI.Notify("Emote spoof disabled", "info")
 end)
@@ -340,6 +394,7 @@ end)
 
 -- ---------- init ----------
 loadEmotes()
+installPlayHook()
 if #emotes == 0 then
 	status.Text = "No emotes found"
 else

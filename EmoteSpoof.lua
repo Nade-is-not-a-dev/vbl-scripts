@@ -62,7 +62,7 @@ local function httpGet(url)
 	if ok2 and type(body) == "string" then return body end
 	return nil
 end
-local _fw = httpGet("https://raw.githubusercontent.com/Nade-is-not-a-dev/vbl-scripts/main/gui_framework.lua")
+local _fw = httpGet("https://raw.githubusercontent.com/Nade-is-not-a-dev/vbl-scripts/main/gui_framework.lua?cb=" .. tostring(os.time()))
 local GUI = _fw and loadstring(_fw)()
 assert(GUI, "Failed to load GUI framework - check connection")
 

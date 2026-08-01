@@ -69,7 +69,7 @@ local function runScript(name)
 end
 
 -- ---------- GUI framework (fetched from repo) ----------
-local _fw = fetch(RAW_URL .. "gui_framework.lua")
+local _fw = fetch(RAW_URL .. "gui_framework.lua?cb=" .. tostring(os.time()))
 local GUI = _fw and loadstring(_fw)()
 assert(GUI, "Failed to load GUI framework - check connection")
 

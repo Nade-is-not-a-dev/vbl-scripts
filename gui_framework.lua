@@ -105,20 +105,43 @@ function GUI.Window(opts)
 	content.BackgroundTransparency = 1
 	content.Parent = root
 
+	local logo = Instance.new("Frame")
+	logo.Name = "Logo"
+	logo.Size = UDim2.fromOffset(38, 38)
+	logo.Position = basePos + UDim2.new(0, 8, 0, 8)
+	logo.BackgroundColor3 = GUI.Theme.accent
+	logo.BorderSizePixel = 0
+	logo.Active = true
+	logo.Visible = false
+	rounded(logo, 19)
+	logo.Parent = gui
+
+	local logoLabel = Instance.new("TextLabel")
+	logoLabel.Size = UDim2.new(1, 0, 1, 0)
+	logoLabel.BackgroundTransparency = 1
+	logoLabel.Text = opts.icon or "🏐"
+	logoLabel.TextColor3 = Color3.new(1, 1, 1)
+	logoLabel.Font = Enum.Font.GothamBold
+	logoLabel.TextSize = 20
+	logoLabel.Parent = logo
+
 	local window = {
 		Root = root,
 		Content = content,
 		Title = titleLabel,
 		Gui = gui,
+		Logo = logo,
 		_closed = false,
 	}
 
 	local minimized = false
-	local fullSize = root.Size
 	local function setMinimized(min)
 		minimized = min
-		root.Size = min and UDim2.new(fullSize.X.Scale, fullSize.X.Offset, 0, 30) or fullSize
-		content.Visible = not min
+		root.Visible = not min
+		logo.Visible = min
+		if min then
+			logo.Position = root.Position + UDim2.new(0, 8, 0, 8)
+		end
 	end
 
 	window.Close = function()
@@ -126,6 +149,7 @@ function GUI.Window(opts)
 		window._closed = true
 		if opts.OnClose then pcall(opts.OnClose) end
 		root.Visible = false
+		logo.Visible = false
 	end
 
 	window.ToggleMinimize = function() setMinimized(not minimized) end
@@ -136,8 +160,16 @@ function GUI.Window(opts)
 	closeBtn.MouseButton1Click:Connect(window.Close)
 	minBtn.MouseButton1Click:Connect(window.ToggleMinimize)
 
+	logo.MouseButton1Click:Connect(function()
+		if not window._closed then
+			setMinimized(false)
+		end
+	end)
+
 	local dragging = false
 	local dragStart, startPos
+	local logoDragging = false
+	local logoDragStart, logoStartPos
 	titlebar.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1
 		or input.UserInputType == Enum.UserInputType.Touch then
@@ -152,11 +184,30 @@ function GUI.Window(opts)
 			dragging = false
 		end
 	end)
+	logo.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
+			logoDragging = true
+			logoDragStart = input.Position
+			logoStartPos = logo.Position
+		end
+	end)
+	logo.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
+			logoDragging = false
+		end
+	end)
 	UserInputService.InputChanged:Connect(function(input)
 		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
 		or input.UserInputType == Enum.UserInputType.Touch) then
 			local delta = input.Position - dragStart
 			root.Position = startPos + UDim2.new(0, delta.X, 0, delta.Y)
+		end
+		if logoDragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+		or input.UserInputType == Enum.UserInputType.Touch) then
+			local delta = input.Position - logoDragStart
+			logo.Position = logoStartPos + UDim2.new(0, delta.X, 0, delta.Y)
 		end
 	end)
 

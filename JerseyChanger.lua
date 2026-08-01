@@ -111,7 +111,11 @@ local function applyJersey(id)
 		if not JerseyTool or not JerseyTool.set then
 			error("Tools.Jersey not loaded")
 		end
-		JerseyTool.set({ Character = char, Id = id })
+		local setArgs = { Character = char, Id = id, Player = lp }
+		if teamBox and teamBox.Text ~= "" and teamBox.Text:upper() ~= "RANDOM" then
+			setArgs.TeamName = teamBox.Text
+		end
+		JerseyTool.set(setArgs)
 	end)
 	applyBusy = false
 	if ok then
@@ -186,16 +190,25 @@ local frame = win.Content
 
 local status = GUI.Label(frame, "Loading jerseys...", UDim2.new(0, 10, 0, 8), UDim2.new(1, -20, 0, 16))
 local nameBox = GUI.Input(frame, "ClassicJersey", UDim2.new(0, 10, 0, 28), UDim2.new(1, -20, 0, 26))
-local prevBtn = GUI.Button(frame, "<", UDim2.new(0, 10, 0, 62), UDim2.new(0, 30, 0, 26))
-local nextBtn = GUI.Button(frame, ">", UDim2.new(0, 44, 0, 62), UDim2.new(0, 30, 0, 26))
-local applyBtn = GUI.Button(frame, "APPLY", UDim2.new(0, 78, 0, 62), UDim2.new(0, 80, 0, 26), { color = GUI.Theme.success })
-local resetBtn = GUI.Button(frame, "RESET", UDim2.new(0, 162, 0, 62), UDim2.new(0, 52, 0, 26), { color = GUI.Theme.danger })
+local teams = { "RANDOM", "White Team", "Red Team", "Purple Team", "Orange Team", "Black Team" }
+local teamIndex = 1
+local teamBox = GUI.Input(frame, "RANDOM", UDim2.new(0, 44, 0, 58), UDim2.new(1, -54, 0, 26))
+local teamCycleBtn = GUI.Button(frame, "COLOR", UDim2.new(0, 10, 0, 58), UDim2.new(0, 30, 0, 26))
+local prevBtn = GUI.Button(frame, "<", UDim2.new(0, 10, 0, 92), UDim2.new(0, 30, 0, 26))
+local nextBtn = GUI.Button(frame, ">", UDim2.new(0, 44, 0, 92), UDim2.new(0, 30, 0, 26))
+local applyBtn = GUI.Button(frame, "APPLY", UDim2.new(0, 78, 0, 92), UDim2.new(0, 80, 0, 26), { color = GUI.Theme.success })
+local resetBtn = GUI.Button(frame, "RESET", UDim2.new(0, 162, 0, 92), UDim2.new(0, 52, 0, 26), { color = GUI.Theme.danger })
+
+teamCycleBtn.MouseButton1Click:Connect(function()
+	teamIndex = teamIndex % #teams + 1
+	teamBox.Text = teams[teamIndex]
+end)
 
 local hint = Instance.new("TextLabel")
 hint.Size = UDim2.new(1, -16, 0, 14)
 hint.Position = UDim2.new(0, 8, 1, -42)
 hint.BackgroundTransparency = 1
-hint.Text = "APPLY = show this jersey on you"
+hint.Text = "COLOR = jersey color variant | RANDOM = any color"
 hint.TextColor3 = Color3.fromRGB(150, 150, 160)
 hint.Font = Enum.Font.Code
 hint.TextSize = 9
@@ -223,7 +236,7 @@ applyBtn.MouseButton1Click:Connect(function()
 	local id = nameBox.Text
 	if applyJersey(id) then
 		status.Text = "Jersey -> " .. id
-		config.JerseyChanger = { selected = id }
+		config.JerseyChanger = { selected = id, team = teamBox.Text }
 		saveConfig()
 		GUI.Notify("Jersey applied: " .. id, "success")
 	else
@@ -259,6 +272,10 @@ if saved and type(saved) == "string" then
 	end
 	if found then
 		nameBox.Text = saved
+		if config.JerseyChanger.team and type(config.JerseyChanger.team) == "string"
+		and config.JerseyChanger.team ~= "" then
+			teamBox.Text = config.JerseyChanger.team
+		end
 		selectedId = saved
 		applyJersey(saved)
 		status.Text = "Restored saved jersey -> " .. saved

@@ -74,6 +74,20 @@ local jerseys = {}
 local jerseyIndex = 0
 local selectedId = nil
 
+-- ---------- deep logging ----------
+local LOG_PATH = "JerseyChanger_log.txt"
+local logbuf = {}
+local function now()
+	local ok, s = pcall(os.date, "%H:%M:%S")
+	return ok and s or tostring(os.time())
+end
+local function log(msg)
+	table.insert(logbuf, "[" .. now() .. "] " .. tostring(msg))
+	if #logbuf > 300 then table.remove(logbuf, 1) end
+	pcall(writefile, LOG_PATH, table.concat(logbuf, "\n"))
+end
+log("=== JerseyChanger started === selectedId=" .. tostring(selectedId))
+
 -- ---------- jersey list ----------
 local function loadJerseys()
 	jerseys = {}
@@ -115,6 +129,18 @@ end
 
 -- ---------- apply ----------
 local applyBusy = false
+local appliedShirt = nil
+
+local function captureShirt()
+	appliedShirt = nil
+	local char = lp.Character
+	if char then
+		local s = char:FindFirstChildOfClass("Shirt")
+		if s then
+			appliedShirt = { t = s.Texture, m = s.Mesh }
+		end
+	end
+end
 
 local function applyJersey(id)
 	if applyBusy then return end
@@ -141,8 +167,13 @@ local function applyJersey(id)
 	applyBusy = false
 	if ok then
 		selectedId = id
+		captureShirt()
+		log("APPLY ok id=" .. tostring(id)
+			.. " team=" .. tostring(teamBox and teamBox.Text or "?")
+			.. " shirt=" .. tostring(appliedShirt and appliedShirt.t or "none"))
 	else
 		status.Text = "Apply failed: " .. tostring(err)
+		log("APPLY FAILED: " .. tostring(err))
 	end
 	return ok
 end
@@ -311,7 +342,12 @@ if JerseyTool and JerseyTool.set then
 	local origSet = JerseyTool.set
 	JerseyTool.set = hookfunction(origSet, newcclosure(function(p9)
 		if type(p9) == "table" and selectedId then
-			p9 = p9 or {}
+			if not applyBusy then
+				log("HOOK(game) set called: id=" .. tostring(p9.Id)
+					.. " team=" .. tostring(p9.TeamName)
+					.. " (we force id=" .. tostring(selectedId)
+					.. " team=" .. tostring(teamBox and teamBox.Text or "?"))
+			end
 			p9.Id = selectedId
 			if teamBox and teamBox.Text ~= "" and teamBox.Text:upper() ~= "RANDOM" then
 				p9.TeamName = teamBox.Text
@@ -324,4 +360,35 @@ if JerseyTool and JerseyTool.set then
 		end
 		return origSet(p9)
 	end))
+	log("HOOK installed on JerseyTool.set")
 end
+
+-- watchdog: detect when the game replaces our shirt/jersey on the character
+task.spawn(function()
+	local tickCount = 0
+	while true do
+		task.wait(5)
+		tickCount = tickCount + 1
+		local char = lp.Character
+		if char then
+			local s = char:FindFirstChildOfClass("Shirt")
+			local t = s and s.Texture or "none"
+			if appliedShirt and t ~= appliedShirt.t then
+				log("OVERRIDE: shirt changed " .. tostring(appliedShirt.t) .. " -> " .. tostring(t))
+				if selectedId then
+					applyJersey(selectedId)
+				end
+			end
+			local jb = char:FindFirstChild("JerseyBack")
+			if not jb and selectedId then
+				log("OVERRIDE: JerseyBack missing, re-applying")
+				applyJersey(selectedId)
+			end
+			if tickCount % 12 == 0 then
+				log("WATCH: shirt=" .. tostring(t)
+					.. " jerseyBack=" .. tostring(jb and "yes" or "no")
+					.. " selected=" .. tostring(selectedId))
+			end
+		end
+	end
+end)

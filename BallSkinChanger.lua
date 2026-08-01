@@ -65,11 +65,6 @@ local win = GUI.Window({
 	name = "BallSkinChanger",
 	size = Vector2.new(280, 200),
 	y = 90,
-	OnClose = function()
-		for ball in pairs(seen) do
-			restoreBall(ball)
-		end
-	end,
 })
 local frame = win.Content
 

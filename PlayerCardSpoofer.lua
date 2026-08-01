@@ -151,9 +151,6 @@ local win = GUI.Window({
 	name = "PlayerCardSpoofer",
 	size = Vector2.new(280, 200),
 	y = 90,
-	OnClose = function()
-		selectedId = nil
-	end,
 })
 local frame = win.Content
 

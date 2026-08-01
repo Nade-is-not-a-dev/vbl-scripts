@@ -162,18 +162,30 @@ local win = GUI.Window({
 })
 local frame = win.Content
 
-local status = GUI.Label(frame, "Loading script list...", UDim2.new(0, 10, 0, 6), UDim2.new(1, -20, 0, 16))
-local refreshBtn = GUI.Button(frame, "REFRESH", UDim2.new(0, 10, 0, 26), UDim2.new(0, 100, 0, 24))
-local commitLabel = GUI.Label(frame, "commit: ?", UDim2.new(0, 10, 1, -16), UDim2.new(1, -20, 0, 14),
+-- t6: margins konsisten 12px; spinner + refresh hover + scrollbar token
+local status = GUI.Label(frame, "Loading script list...", UDim2.new(0, 12, 0, 12), UDim2.new(1, -48, 0, 16))
+local spinner = GUI.Spinner(frame, { position = UDim2.new(1, -30, 0, 11), size = UDim2.fromOffset(18, 18) })
+local refreshBtn = GUI.Button(frame, "REFRESH", UDim2.new(0, 12, 0, 32), UDim2.new(0, 110, 0, 24))
+-- t6: hover feedback eksplisit (defensive bila framework di repo belum v1.1.0)
+local refreshBase = refreshBtn.BackgroundColor3
+refreshBtn.MouseEnter:Connect(function()
+	pcall(GUI.Animate, refreshBtn, { BackgroundColor3 = GUI.hoverColor(refreshBase) }, 0.1)
+end)
+refreshBtn.MouseLeave:Connect(function()
+	pcall(GUI.Animate, refreshBtn, { BackgroundColor3 = refreshBase }, 0.1)
+end)
+local commitLabel = GUI.Label(frame, "commit: ?", UDim2.new(0, 12, 1, -26), UDim2.new(1, -24, 0, 14),
 	{ color = GUI.Theme.warn, textSize = 9 })
 
 local listFrame = Instance.new("ScrollingFrame")
-listFrame.Size = UDim2.new(1, -20, 1, -66)
-listFrame.Position = UDim2.new(0, 10, 0, 56)
+listFrame.Size = UDim2.new(1, -24, 0, 118)
+listFrame.Position = UDim2.new(0, 12, 0, 60)
 listFrame.BackgroundColor3 = GUI.Theme.input
 listFrame.BorderSizePixel = 0
 listFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 listFrame.ScrollBarThickness = 4
+listFrame.ScrollBarColor3 = GUI.Theme.surface
+listFrame.ScrollBarImageColor3 = GUI.Theme.hover
 listFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
 listFrame.Parent = frame
 local listCorner = Instance.new("UICorner")
@@ -182,7 +194,7 @@ listCorner.Parent = listFrame
 
 local function addScriptButton(name, index)
 	local b = GUI.Button(listFrame, name:gsub("%.lua$", ""),
-		UDim2.new(0, 4, 0, (index - 1) * 30), UDim2.new(1, -8, 0, 26))
+		UDim2.new(0, 6, 0, (index - 1) * 30), UDim2.new(1, -12, 0, 26))
 	b.MouseButton1Click:Connect(function()
 		status.Text = "Running " .. name .. "..."
 		local ok = runScript(name)
@@ -214,9 +226,23 @@ local function renderList()
 	status.Text = "Scripts: " .. #list
 end
 
-refreshBtn.MouseButton1Click:Connect(renderList)
+-- t6: spinner START sebelum memuat list, STOP saat selesai (success/error)
+-- guard spinner ganda: GUI.Spinner.Start menolak bila sudah running
+local function loadList()
+	pcall(spinner.Start)
+	log("list loading started (spinner on)")
+	local ok, err = pcall(renderList)
+	pcall(spinner.Stop)
+	if ok then
+		log("list loading finished (spinner off)")
+	else
+		logError("list render failed: " .. tostring(err))
+	end
+end
 
-renderList()
+refreshBtn.MouseButton1Click:Connect(loadList)
+
+loadList()
 
 task.spawn(function()
 	local sha = getLastCommit()

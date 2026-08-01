@@ -9,7 +9,7 @@ local pg = Players.LocalPlayer:WaitForChild("PlayerGui")
 
 local GUI = {}
 
-GUI.Version = "1.0.4"
+GUI.Version = "1.0.5"
 GUI.Log = function() end
 
 GUI.Theme = {

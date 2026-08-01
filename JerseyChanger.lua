@@ -54,6 +54,22 @@ pcall(function()
 	JerseyTool = require(ReplicatedStorage.Tools.Jersey)
 end)
 
+local function getStyleInfo()
+	local okState, State = pcall(require, ReplicatedStorage.Common.State)
+	if not okState or type(State) ~= "table" then return nil, nil end
+	local okId, styleId = pcall(function()
+		return State.get(lp, State.Id.Gameplay, "Style")
+	end)
+	if not okId or not styleId then return nil, nil end
+	local okStyle, Style = pcall(require, ReplicatedStorage.Content.Style)
+	if not okStyle or type(Style) ~= "table" then return nil, nil end
+	local okGet, style = pcall(function()
+		return Style:Get(styleId)
+	end)
+	if not okGet or type(style) ~= "table" then return nil, nil end
+	return style.DisplayName, style.Number
+end
+
 local jerseys = {}
 local jerseyIndex = 0
 local selectedId = nil
@@ -112,6 +128,11 @@ local function applyJersey(id)
 			error("Tools.Jersey not loaded")
 		end
 		local setArgs = { Character = char, Id = id, Player = lp }
+		local sName, sNumber = getStyleInfo()
+		if sName and sNumber then
+			setArgs.Name = sName
+			setArgs.Number = sNumber
+		end
 		if teamBox and teamBox.Text ~= "" and teamBox.Text:upper() ~= "RANDOM" then
 			setArgs.TeamName = teamBox.Text
 		end

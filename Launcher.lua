@@ -102,8 +102,19 @@ local function getLastCommit()
 	return nil
 end
 
+local function killOldGuis()
+	local guiNames = { "JerseyChanger", "BallSkinChanger", "PlayerCardSpoofer", "EmoteSpoof" }
+	for _, n in ipairs(guiNames) do
+		local g = lp.PlayerGui:FindFirstChild(n)
+		if g and g:IsA("ScreenGui") then
+			g:Destroy()
+		end
+	end
+end
+
 local function runScript(name)
 	log("RUN " .. name .. " ...")
+	killOldGuis()
 	local code = fetch(RAW_URL .. name)
 	if not code then
 		logError("RUN " .. name .. " failed: fetch returned nil")

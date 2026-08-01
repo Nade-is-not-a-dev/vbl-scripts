@@ -132,6 +132,14 @@ if GUI then
 	GUI.Log = log
 end
 
+-- single-instance guard: any newer launch of this script takes over
+local instanceStamp = os.time()
+_G.VBL_JC_STAMP = instanceStamp
+log("instance stamp: " .. tostring(instanceStamp))
+local function stillMine()
+	return _G.VBL_JC_STAMP == instanceStamp
+end
+
 local RARITY_COLORS = {
 	[-2] = Color3.fromRGB(255, 70, 90),
 	[-1] = Color3.new(1, 1, 1),
@@ -213,6 +221,7 @@ local function captureShirt()
 end
 
 local function applyJersey(id)
+	if not stillMine() then return false end
 	if applyBusy then return end
 	applyBusy = true
 	local ok, err = pcall(function()
@@ -283,6 +292,7 @@ lp.CharacterAdded:Connect(function(char)
 	task.spawn(function()
 		for _ = 1, 20 do
 			task.wait(0.3)
+			if not stillMine() then return end
 			if selectedId and char.Parent and char:FindFirstChildOfClass("Humanoid") then
 				applyJersey(selectedId)
 				return
@@ -296,6 +306,7 @@ end)
 task.spawn(function()
 	while true do
 		task.wait(2)
+		if not stillMine() then return end
 		if selectedId then
 			applyJersey(selectedId)
 		end
@@ -488,6 +499,7 @@ task.spawn(function()
 	local tickCount = 0
 	while true do
 		task.wait(5)
+		if not stillMine() then return end
 		tickCount = tickCount + 1
 		local char = lp.Character
 		if char then

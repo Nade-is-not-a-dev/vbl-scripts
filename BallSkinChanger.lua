@@ -79,6 +79,14 @@ if GUI then
 	GUI.Log = log
 end
 
+-- single-instance guard: any newer launch of this script takes over
+local instanceStamp = os.time()
+_G.VBL_BSC_STAMP = instanceStamp
+log("instance stamp: " .. tostring(instanceStamp))
+local function stillMine()
+	return _G.VBL_BSC_STAMP == instanceStamp
+end
+
 -- ---------- GUI (framework) ----------
 local win = GUI.Window({
 	title = "Ball Skin Changer",
@@ -236,6 +244,7 @@ local function processBall(ball)
 end
 
 local function sweep()
+	if not stillMine() then return end
 	for _, ball in ipairs(CollectionService:GetTagged("Ball")) do
 		processBall(ball)
 		seen[ball] = true
@@ -254,13 +263,14 @@ workspace.ChildAdded:Connect(function(child)
 	if typeof(child) == "Instance" and child:IsA("Model") and CollectionService:HasTag(child, "Ball") then
 		task.spawn(function()
 			task.wait(0.1)
+			if not stillMine() then return end
 			processBall(child)
 		end)
 	end
 end)
 
 RunService.Heartbeat:Connect(function()
-	if #CollectionService:GetTagged("Ball") > 0 then
+	if stillMine() and #CollectionService:GetTagged("Ball") > 0 then
 		task.spawn(sweep)
 	end
 end)

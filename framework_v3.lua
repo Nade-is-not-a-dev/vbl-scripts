@@ -9,8 +9,17 @@ local pg = Players.LocalPlayer:WaitForChild("PlayerGui")
 
 local GUI = {}
 
-GUI.Version = "1.0.5"
+GUI.Version = "1.0.6"
 GUI.Log = function() end
+
+local function normalizeAssetURL(s)
+	if type(s) ~= "string" or s == "" then return s end
+	local id = s:match("asset/?%?id=(%d+)")
+	if id then
+		return "rbxassetid://" .. id
+	end
+	return s
+end
 
 GUI.Theme = {
 	bg = Color3.fromRGB(12, 12, 16),
@@ -326,6 +335,16 @@ function GUI.BuildJerseyView(assetName, teamName)
 	upper.Anchored = true
 	upper.CanCollide = false
 	upper.CFrame = CFrame.new(0, 1, 0)
+	if upper:IsA("MeshPart") then
+		upper.MeshId = normalizeAssetURL(upper.MeshId)
+		upper.TextureID = normalizeAssetURL(upper.TextureID)
+	else
+		local m = upper:FindFirstChildOfClass("SpecialMesh")
+		if m then
+			m.MeshId = normalizeAssetURL(m.MeshId)
+			m.TextureId = normalizeAssetURL(m.TextureId)
+		end
+	end
 	hrp.CFrame = CFrame.new(0, 0.2, 0)
 	local meshInfo = "no-mesh"
 	if upper:IsA("MeshPart") then
@@ -344,7 +363,7 @@ function GUI.BuildJerseyView(assetName, teamName)
 	probe.CanCollide = false
 	probe.Material = Enum.Material.SmoothPlastic
 	probe.Color = Color3.new(1, 0, 0)
-	probe.CFrame = CFrame.new(0, 0.4, 0)
+	probe.CFrame = CFrame.new(0, 0.1, 0)
 	for _, p in ipairs(parts) do
 		if p:IsA("SurfaceGui") then
 			pcall(function()
@@ -421,8 +440,12 @@ function GUI.PrepareViewport(vp, view, name)
 			end
 			for _, d in ipairs(view:GetDescendants()) do
 				if d:IsA("MeshPart") then
+					d.MeshId = normalizeAssetURL(d.MeshId)
+					d.TextureID = normalizeAssetURL(d.TextureID)
 					addInst(d)
 				elseif d:IsA("SpecialMesh") then
+					d.MeshId = normalizeAssetURL(d.MeshId)
+					d.TextureId = normalizeAssetURL(d.TextureId)
 					addInst(d)
 				elseif d:IsA("Texture") or d:IsA("Decal") then
 					addInst(d)

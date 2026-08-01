@@ -381,25 +381,48 @@ local function updateStatus()
 	end
 end
 
--- self-test: can the target animation actually load? logs its length
-local function testTarget()
-	if not target then return end
+-- self-test: can the target animation actually load? logs its length and
+-- compares against a known-good emote (Floss) to tell a dead asset apart
+local ContentProvider = game:GetService("ContentProvider")
+local function testAsset(asset, label)
 	local char = lp.Character
 	local hum = char and char:FindFirstChildOfClass("Humanoid")
 	local animator = hum and hum:FindFirstChildOfClass("Animator")
 	if not animator then
-		log("SELFTEST skipped: no animator yet")
+		log("SELFTEST " .. label .. " skipped: no animator yet")
 		return
 	end
+	local a = Instance.new("Animation")
+	a.AnimationId = asset
+	local okP = false
+	local okPre, errPre = pcall(function()
+		ContentProvider:PreloadAsync({ a })
+	end)
+	okP = okPre
+	task.wait(0.5)
+	local okL, tr = pcall(function()
+		return animator:LoadAnimation(a)
+	end)
+	local len = okL and tr and tr.Length or "nil"
+	log("SELFTEST " .. label .. ": preload=" .. tostring(okP)
+		.. (okP and "" or (" (" .. tostring(errPre) .. ")"))
+		.. " load=" .. tostring(okL)
+		.. " Length=" .. tostring(len))
 	pcall(function()
-		local a = Instance.new("Animation")
-		a.AnimationId = target.asset
-		a.Parent = animator
-		local tr = animator:LoadAnimation(a)
-		log("SELFTEST: " .. target.name .. " loaded, Length=" .. tostring(tr and tr.Length or "nil"))
 		if tr then tr:Stop() tr:Destroy() end
 		a:Destroy()
 	end)
+end
+
+local function testTarget()
+	if not target then return end
+	testAsset(target.asset, "TARGET")
+	for _, e in ipairs(emotes) do
+		if e.name:find("Floss") then
+			testAsset(e.asset, "FLOSS")
+			break
+		end
+	end
 end
 
 local function applyEmote(name)

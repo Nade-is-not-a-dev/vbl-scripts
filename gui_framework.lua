@@ -105,12 +105,14 @@ function GUI.Window(opts)
 	content.BackgroundTransparency = 1
 	content.Parent = root
 
-	local logo = Instance.new("Frame")
+	local logo = Instance.new("TextButton")
 	logo.Name = "Logo"
 	logo.Size = UDim2.fromOffset(38, 38)
 	logo.Position = basePos + UDim2.new(0, 8, 0, 8)
 	logo.BackgroundColor3 = GUI.Theme.accent
 	logo.BorderSizePixel = 0
+	logo.Text = ""
+	logo.AutoButtonColor = false
 	logo.Active = true
 	logo.Visible = false
 	rounded(logo, 19)

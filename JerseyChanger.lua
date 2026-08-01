@@ -303,3 +303,25 @@ if saved and type(saved) == "string" then
 		GUI.Notify("Restored saved jersey: " .. saved, "success")
 	end
 end
+
+-- ---------- JerseyTool.set hook ----------
+-- any caller (including the game's own re-applies) gets our spoof forced,
+-- so the color/id can never change under us
+if JerseyTool and JerseyTool.set then
+	local origSet = JerseyTool.set
+	JerseyTool.set = hookfunction(origSet, newcclosure(function(p9)
+		if type(p9) == "table" and selectedId then
+			p9 = p9 or {}
+			p9.Id = selectedId
+			if teamBox and teamBox.Text ~= "" and teamBox.Text:upper() ~= "RANDOM" then
+				p9.TeamName = teamBox.Text
+			end
+			local sName, sNumber = getStyleInfo()
+			if sName and sNumber then
+				p9.Name = sName
+				p9.Number = sNumber
+			end
+		end
+		return origSet(p9)
+	end))
+end

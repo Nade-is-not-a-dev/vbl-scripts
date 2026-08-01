@@ -125,7 +125,7 @@ function GUI.Window(opts)
 		if window._closed then return end
 		window._closed = true
 		if opts.OnClose then pcall(opts.OnClose) end
-		gui:Destroy()
+		root.Visible = false
 	end
 
 	window.ToggleMinimize = function() setMinimized(not minimized) end

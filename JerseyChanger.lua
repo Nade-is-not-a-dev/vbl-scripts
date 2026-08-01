@@ -167,7 +167,7 @@ end)
 -- safety sweep: the game may re-apply your real jersey (round start, team change)
 task.spawn(function()
 	while true do
-		task.wait(5)
+		task.wait(2)
 		if selectedId then
 			applyJersey(selectedId)
 		end

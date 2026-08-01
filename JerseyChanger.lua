@@ -177,13 +177,22 @@ end
 local applyBusy = false
 local appliedShirt = nil
 
+local function shirtTexture(s)
+	if not s then return nil end
+	local ok, t = pcall(function() return s.ShirtTemplate end)
+	if ok and t and t ~= "" then return t end
+	local ok2, t2 = pcall(function() return s.Texture end)
+	if ok2 and t2 and t2 ~= "" then return t2 end
+	return nil
+end
+
 local function captureShirt()
 	appliedShirt = nil
 	local char = lp.Character
 	if char then
 		local s = char:FindFirstChildOfClass("Shirt")
 		if s then
-			appliedShirt = { t = s.Texture, m = s.Mesh }
+			appliedShirt = { t = shirtTexture(s), m = s.Mesh }
 		end
 	end
 end
@@ -459,7 +468,7 @@ task.spawn(function()
 		local char = lp.Character
 		if char then
 			local s = char:FindFirstChildOfClass("Shirt")
-			local t = s and s.Texture or "none"
+			local t = shirtTexture(s) or "none"
 			if appliedShirt and t ~= appliedShirt.t then
 				log("OVERRIDE: shirt changed " .. tostring(appliedShirt.t) .. " -> " .. tostring(t))
 				if selectedId then

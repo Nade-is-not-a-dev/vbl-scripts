@@ -56,8 +56,8 @@ screenGui.Parent = playerGui
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "Main"
-mainFrame.Size = UDim2.new(0, 220, 0, 408) -- taller to fit new sections
-mainFrame.Position = UDim2.new(0.5, -110, 0.5, -204)
+mainFrame.Size = UDim2.new(0, 720, 0, 180) -- horizontal layout (no bottom cutoff)
+mainFrame.Position = UDim2.new(0.5, -360, 0.5, -90)
 mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
@@ -143,8 +143,8 @@ for i, name in ipairs(order) do
 
 	local btn = Instance.new("TextButton")
 	btn.Name = name
-	btn.Size = UDim2.new(1, -20, 0, 32)
-	btn.Position = UDim2.new(0, 10, 0, 40 + (i - 1) * 38)
+	btn.Size = UDim2.new(0, 220, 0, 30)
+	btn.Position = UDim2.new(0, 15 + (i - 1) * 230, 0, 40)
 	btn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
 	btn.BorderSizePixel = 0
 	btn.Text = name:upper() .. "  [OFF]"
@@ -179,8 +179,8 @@ local styleToggleEnabled = false
 
 -- Label
 local styleLabel = Instance.new("TextLabel")
-styleLabel.Size = UDim2.new(1, -20, 0, 18)
-styleLabel.Position = UDim2.new(0, 10, 0, 158)
+styleLabel.Size = UDim2.new(0, 330, 0, 16)
+styleLabel.Position = UDim2.new(0, 15, 0, 82)
 styleLabel.BackgroundTransparency = 1
 styleLabel.Text = "Style Auto-Roll"
 styleLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
@@ -192,8 +192,8 @@ styleLabel.Parent = mainFrame
 -- TextBox for desired style name
 local styleBox = Instance.new("TextBox")
 styleBox.Name = "StyleTarget"
-styleBox.Size = UDim2.new(1, -20, 0, 28)
-styleBox.Position = UDim2.new(0, 10, 0, 178)
+styleBox.Size = UDim2.new(0, 330, 0, 26)
+styleBox.Position = UDim2.new(0, 15, 0, 100)
 styleBox.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 styleBox.BorderSizePixel = 0
 styleBox.PlaceholderText = "Desired Style Name..."
@@ -212,8 +212,8 @@ boxCorner.Parent = styleBox
 -- Toggle button
 local styleToggleBtn = Instance.new("TextButton")
 styleToggleBtn.Name = "StyleToggle"
-styleToggleBtn.Size = UDim2.new(1, -20, 0, 32)
-styleToggleBtn.Position = UDim2.new(0, 10, 0, 214)
+styleToggleBtn.Size = UDim2.new(0, 330, 0, 30)
+styleToggleBtn.Position = UDim2.new(0, 15, 0, 132)
 styleToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
 styleToggleBtn.BorderSizePixel = 0
 styleToggleBtn.Text = "AUTO-ROLL  [OFF]"
@@ -323,8 +323,8 @@ end)
 
 -- ========== ROLL DELAY SECTION ==========
 local delayLabel = Instance.new("TextLabel")
-delayLabel.Size = UDim2.new(1, -20, 0, 16)
-delayLabel.Position = UDim2.new(0, 10, 0, 254)
+delayLabel.Size = UDim2.new(0, 170, 0, 16)
+delayLabel.Position = UDim2.new(0, 365, 0, 82)
 delayLabel.BackgroundTransparency = 1
 delayLabel.Text = "Roll Delay (sec)"
 delayLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
@@ -335,8 +335,8 @@ delayLabel.Parent = mainFrame
 
 local delayBox = Instance.new("TextBox")
 delayBox.Name = "RollDelay"
-delayBox.Size = UDim2.new(1, -20, 0, 26)
-delayBox.Position = UDim2.new(0, 10, 0, 272)
+delayBox.Size = UDim2.new(0, 170, 0, 26)
+delayBox.Position = UDim2.new(0, 365, 0, 100)
 delayBox.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 delayBox.BorderSizePixel = 0
 delayBox.PlaceholderText = "1.0"
@@ -431,10 +431,10 @@ end
 
 -- Label
 local abilityLabel = Instance.new("TextLabel")
-abilityLabel.Size = UDim2.new(1, -20, 0, 18)
-abilityLabel.Position = UDim2.new(0, 10, 0, 306)
+abilityLabel.Size = UDim2.new(0, 145, 0, 16)
+abilityLabel.Position = UDim2.new(0, 560, 0, 82)
 abilityLabel.BackgroundTransparency = 1
-abilityLabel.Text = "Ability Auto-Roll (open Abilities tab!)"
+abilityLabel.Text = "Ability Auto-Roll"
 abilityLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 abilityLabel.Font = Enum.Font.GothamMedium
 abilityLabel.TextSize = 12
@@ -444,8 +444,8 @@ abilityLabel.Parent = mainFrame
 -- TextBox for desired ability name
 local abilityBox = Instance.new("TextBox")
 abilityBox.Name = "AbilityTarget"
-abilityBox.Size = UDim2.new(1, -20, 0, 28)
-abilityBox.Position = UDim2.new(0, 10, 0, 326)
+abilityBox.Size = UDim2.new(0, 145, 0, 26)
+abilityBox.Position = UDim2.new(0, 560, 0, 100)
 abilityBox.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 abilityBox.BorderSizePixel = 0
 abilityBox.PlaceholderText = "Desired Ability Name..."
@@ -464,8 +464,8 @@ abilityBoxCorner.Parent = abilityBox
 -- Toggle button
 local abilityToggleBtn = Instance.new("TextButton")
 abilityToggleBtn.Name = "AbilityToggle"
-abilityToggleBtn.Size = UDim2.new(1, -20, 0, 32)
-abilityToggleBtn.Position = UDim2.new(0, 10, 0, 362)
+abilityToggleBtn.Size = UDim2.new(0, 145, 0, 30)
+abilityToggleBtn.Position = UDim2.new(0, 560, 0, 132)
 abilityToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
 abilityToggleBtn.BorderSizePixel = 0
 abilityToggleBtn.Text = "AUTO-ROLL  [OFF]"

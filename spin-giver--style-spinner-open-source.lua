@@ -56,8 +56,8 @@ screenGui.Parent = playerGui
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "Main"
-mainFrame.Size = UDim2.new(0, 220, 0, 360) -- taller to fit new section
-mainFrame.Position = UDim2.new(0.5, -110, 0.5, -180)
+mainFrame.Size = UDim2.new(0, 220, 0, 408) -- taller to fit new sections
+mainFrame.Position = UDim2.new(0.5, -110, 0.5, -204)
 mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
@@ -99,6 +99,10 @@ local rewards = {
 local order = {"style", "yen", "ability"} -- display order
 local currentMode = nil -- nil | "style" | "yen" | "ability"
 local buttons = {}
+
+-- ========== ROLL DELAY ==========
+-- Delay (seconds) between successive auto-rolls (shared by style & ability)
+local rollDelay = 1.0
 
 -- The actual remote call (no loop inside)
 local function fireReward(arg)
@@ -292,6 +296,7 @@ task.spawn(function()
 		-- Case-insensitive compare
 		if string.lower(current) ~= string.lower(target) then
 			fireStyleRoll()
+			task.wait(rollDelay)
 		else
 			-- Match found → turn toggle off
 			styleToggleEnabled = false
@@ -314,6 +319,51 @@ styleToggleBtn.MouseButton1Click:Connect(function()
 			end
 		end
 	end
+end)
+
+-- ========== ROLL DELAY SECTION ==========
+local delayLabel = Instance.new("TextLabel")
+delayLabel.Size = UDim2.new(1, -20, 0, 16)
+delayLabel.Position = UDim2.new(0, 10, 0, 254)
+delayLabel.BackgroundTransparency = 1
+delayLabel.Text = "Roll Delay (sec)"
+delayLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+delayLabel.Font = Enum.Font.GothamMedium
+delayLabel.TextSize = 12
+delayLabel.TextXAlignment = Enum.TextXAlignment.Left
+delayLabel.Parent = mainFrame
+
+local delayBox = Instance.new("TextBox")
+delayBox.Name = "RollDelay"
+delayBox.Size = UDim2.new(1, -20, 0, 26)
+delayBox.Position = UDim2.new(0, 10, 0, 272)
+delayBox.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+delayBox.BorderSizePixel = 0
+delayBox.PlaceholderText = "1.0"
+delayBox.Text = "1.0"
+delayBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+delayBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 130)
+delayBox.Font = Enum.Font.Gotham
+delayBox.TextSize = 13
+delayBox.ClearTextOnFocus = false
+delayBox.Parent = mainFrame
+
+local delayBoxCorner = Instance.new("UICorner")
+delayBoxCorner.CornerRadius = UDim.new(0, 6)
+delayBoxCorner.Parent = delayBox
+
+local function applyRollDelay()
+	local n = tonumber(delayBox.Text)
+	if n == nil then
+		delayBox.Text = tostring(rollDelay)
+		return
+	end
+	rollDelay = math.max(0, n)
+	delayBox.Text = tostring(rollDelay)
+end
+
+delayBox.FocusLost:Connect(function()
+	applyRollDelay()
 end)
 
 -- ========== ABILITY AUTO-ROLL SECTION ==========
@@ -382,7 +432,7 @@ end
 -- Label
 local abilityLabel = Instance.new("TextLabel")
 abilityLabel.Size = UDim2.new(1, -20, 0, 18)
-abilityLabel.Position = UDim2.new(0, 10, 0, 254)
+abilityLabel.Position = UDim2.new(0, 10, 0, 306)
 abilityLabel.BackgroundTransparency = 1
 abilityLabel.Text = "Ability Auto-Roll (open Abilities tab!)"
 abilityLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
@@ -395,7 +445,7 @@ abilityLabel.Parent = mainFrame
 local abilityBox = Instance.new("TextBox")
 abilityBox.Name = "AbilityTarget"
 abilityBox.Size = UDim2.new(1, -20, 0, 28)
-abilityBox.Position = UDim2.new(0, 10, 0, 274)
+abilityBox.Position = UDim2.new(0, 10, 0, 326)
 abilityBox.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 abilityBox.BorderSizePixel = 0
 abilityBox.PlaceholderText = "Desired Ability Name..."
@@ -415,7 +465,7 @@ abilityBoxCorner.Parent = abilityBox
 local abilityToggleBtn = Instance.new("TextButton")
 abilityToggleBtn.Name = "AbilityToggle"
 abilityToggleBtn.Size = UDim2.new(1, -20, 0, 32)
-abilityToggleBtn.Position = UDim2.new(0, 10, 0, 310)
+abilityToggleBtn.Position = UDim2.new(0, 10, 0, 362)
 abilityToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
 abilityToggleBtn.BorderSizePixel = 0
 abilityToggleBtn.Text = "AUTO-ROLL  [OFF]"
@@ -468,7 +518,7 @@ task.spawn(function()
 
 		if string.lower(current) ~= string.lower(target) then
 			fireAbilityRoll()
-			task.wait(1)
+			task.wait(rollDelay)
 		else
 			abilityToggleEnabled = false
 			updateAbilityToggleVisual()

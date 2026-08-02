@@ -88,6 +88,61 @@ titleFix.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
 titleFix.BorderSizePixel = 0
 titleFix.Parent = title
 
+-- Minimize button (top-right of the title bar)
+local minBtn = Instance.new("TextButton")
+minBtn.Name = "Minimize"
+minBtn.Size = UDim2.new(0, 24, 0, 24)
+minBtn.Position = UDim2.new(1, -28, 0, 4)
+minBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+minBtn.BorderSizePixel = 0
+minBtn.Text = "-"
+minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+minBtn.Font = Enum.Font.GothamBold
+minBtn.TextSize = 16
+minBtn.AutoButtonColor = false
+minBtn.Parent = title
+
+local minBtnCorner = Instance.new("UICorner")
+minBtnCorner.CornerRadius = UDim.new(0, 6)
+minBtnCorner.Parent = minBtn
+
+-- Small logo shown while minimized (click to restore)
+local logo = Instance.new("TextButton")
+logo.Name = "Logo"
+logo.Size = UDim2.new(0, 40, 0, 30)
+logo.Position = UDim2.new(0, 10, 0, 10)
+logo.BackgroundColor3 = Color3.fromRGB(80, 160, 255)
+logo.BorderSizePixel = 0
+logo.Text = "RR"
+logo.TextColor3 = Color3.fromRGB(255, 255, 255)
+logo.Font = Enum.Font.GothamBold
+logo.TextSize = 14
+logo.AutoButtonColor = false
+logo.Visible = false
+logo.Parent = screenGui
+
+local logoCorner = Instance.new("UICorner")
+logoCorner.CornerRadius = UDim.new(0, 6)
+logoCorner.Parent = logo
+
+-- Minimize / restore logic
+local function setMinimized(min)
+	mainFrame.Visible = not min
+	logo.Visible = min
+	if min then
+		-- keep the logo where the main frame is
+		logo.Position = mainFrame.Position + UDim2.new(0, 8, 0, 8)
+	end
+end
+
+minBtn.MouseButton1Click:Connect(function()
+	setMinimized(true)
+end)
+
+logo.MouseButton1Click:Connect(function()
+	setMinimized(false)
+end)
+
 -- ========== DATA ==========
 -- name → {arg, color}
 local rewards = {
@@ -542,34 +597,54 @@ abilityToggleBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ========== DRAGGABLE ==========
-local dragging = false
-local dragStart, startPos
+local function isPointInGuiObject(obj, point)
+	local pos = obj.AbsolutePosition
+	local size = obj.AbsoluteSize
+	return point.X >= pos.X and point.X <= pos.X + size.X
+		and point.Y >= pos.Y and point.Y <= pos.Y + size.Y
+end
 
+local _MAIN_DRAG, _LOGO_DRAG
+
+-- Drag the main frame by its title bar (presses on the "-" button never drag)
 title.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1
-	or input.UserInputType == Enum.UserInputType.Touch then
-		dragging = true
-		dragStart = input.Position
-		startPos = mainFrame.Position
-	end
+	if input.UserInputType ~= Enum.UserInputType.MouseButton1
+	and input.UserInputType ~= Enum.UserInputType.Touch then return end
+	if isPointInGuiObject(minBtn, UserInputService:GetMouseLocation()) then return end
+	_MAIN_DRAG = { Moved = mainFrame, Start = input.Position, Base = mainFrame.Position }
 end)
 
-title.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1
-	or input.UserInputType == Enum.UserInputType.Touch then
-		dragging = false
-	end
+title.InputEnded:Connect(function()
+	_MAIN_DRAG = nil
+end)
+
+-- Drag the minimized logo (moves the main frame too, so restore lands where you put it)
+logo.InputBegan:Connect(function(input)
+	if input.UserInputType ~= Enum.UserInputType.MouseButton1
+	and input.UserInputType ~= Enum.UserInputType.Touch then return end
+	_LOGO_DRAG = { Moved = mainFrame, Start = input.Position, Base = mainFrame.Position }
+end)
+
+logo.InputEnded:Connect(function()
+	_LOGO_DRAG = nil
 end)
 
 UserInputService.InputChanged:Connect(function(input)
-	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
-	or input.UserInputType == Enum.UserInputType.Touch) then
-		local delta = input.Position - dragStart
-		mainFrame.Position = UDim2.new(
-			startPos.X.Scale,
-			startPos.X.Offset + delta.X,
-			startPos.Y.Scale,
-			startPos.Y.Offset + delta.Y
-		)
+	if input.UserInputType ~= Enum.UserInputType.MouseMovement
+	and input.UserInputType ~= Enum.UserInputType.Touch then return end
+	for _, drag in ipairs({ _MAIN_DRAG, _LOGO_DRAG }) do
+		if drag then
+			local delta = input.Position - drag.Start
+			drag.Moved.Position = UDim2.new(
+				drag.Base.X.Scale,
+				drag.Base.X.Offset + delta.X,
+				drag.Base.Y.Scale,
+				drag.Base.Y.Offset + delta.Y
+			)
+			if drag.Moved == mainFrame then
+				-- keep the logo glued to the frame while dragging
+				logo.Position = mainFrame.Position + UDim2.new(0, 8, 0, 8)
+			end
+		end
 	end
 end)

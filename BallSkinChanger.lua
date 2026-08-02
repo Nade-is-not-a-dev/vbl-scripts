@@ -203,14 +203,34 @@ local function applySkin(ball, skinName)
 
 	-- clone the target skin and weld it to the ball's primary part
 	local clone = skinModel:Clone()
-	local okScale = pcall(function()
-		clone:ScaleTo(ball:GetScale())
-	end)
 	local clonePrimary = clone.PrimaryPart or clone:FindFirstChildWhichIsA("BasePart")
 	if not clonePrimary then
 		restoreBall(ball)
 		return
 	end
+
+	-- scale the skin to match the REAL ball's size and NEVER be bigger:
+	-- a skin part larger than the ball masks the actual hit effect, so
+	-- players aim at a fake bigger ball and the hit never lands.
+	-- The real collision stays on the (hidden) original ball parts,
+	-- so the skin must fit inside that exact size. Per-axis ratio ->
+	-- every axis ends up <= the ball's axis (exact match on the dominant one).
+	local ballSize = primary.Size
+	local skinSize = clonePrimary.Size
+	local scaleFactor = 1
+	if skinSize.Magnitude > 0 then
+		local rx = ballSize.X / math.max(skinSize.X, 0.001)
+		local ry = ballSize.Y / math.max(skinSize.Y, 0.001)
+		local rz = ballSize.Z / math.max(skinSize.Z, 0.001)
+		scaleFactor = math.min(rx, ry, rz)
+	end
+	pcall(function()
+		clone:ScaleTo(scaleFactor)
+	end)
+	log("APPLY skin=" .. tostring(skinName)
+		.. " factor=" .. string.format("%.3f", scaleFactor)
+		.. " ball=" .. string.format("%.2f", ballSize.Magnitude)
+		.. " skin=" .. string.format("%.2f", skinSize.Magnitude))
 
 	pcall(function() clone:PivotTo(primary.CFrame) end)
 
